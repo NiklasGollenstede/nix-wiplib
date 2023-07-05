@@ -5,15 +5,18 @@ The idea of this repo / flake is that whenever I have a Nix function, NixOS Modu
 
 Eventually I may decide to move parts of this into their own flake repository, but as long as they live here, APIs are not necessarily stable.
 
-The more interesting of the components currently in this repository are largely concerned with good structures for Nix flakes, in particular those defining NixOS configurations, and installing hosts from those configurations.
+## Graduates
+
+Former residents of this repository that now live on their own:
+* [`nixos-installer`](https://github.com/NiklasGollenstede/nixos-installer/): A fully automated NixOS CLI installer. Declare your hardware setup and install with a single command -- reproducibly.
+* [`nix-functions`](https://github.com/NiklasGollenstede/nix-functions/): A collection of Nix language functions. Has abstractions for dealing with flakes and imports in general, many functions that transform values (attrsets, lists, string, scripts), and more.
 
 
 ## Repo Layout
 
 This is a nix flake repository, so [`flake.nix`](./flake.nix) is the entry point and export mechanism for almost everything.
 
-[`lib/`](./lib/) adds additional library functions as `.wip` to the default `nixpkgs.lib` and exports the whole thing as `lib`. Other folders in this repo may thus use them as `inputs.self.lib.wip.*`. \
-[`lib/setup-scripts/`](./lib/setup-scripts/) contains bash scripts that integrate with the options defined in [`modules/fs/`](./modules/fs/) (esp. [`modules/fs/disks.nix.md`](./modules/fs/disks.nix.md)) and some default options to do flexible and fully automated installations of configured NixOS hosts.
+[`lib/`](./lib/) defines new library functions which are exported as the `lib` flake output. Other Nix files in this repo use them as `inputs.self.lib`.
 
 [`modules/`](./modules/) contains NixOS configuration modules. Added options' names start with `wip.` (or a custom prefix, see [Namespacing](#namespacing-in-nixos)).
 The modules are inactive by default, and are, where possible, designed to be independent from each other and the other things in this repo. Some though do have dependencies on added or modified packages, or other modules in the same directory.
@@ -24,11 +27,8 @@ The modules are inactive by default, and are, where possible, designed to be ind
 
 [`patches/`](./patches/) contains patches which are either applied to the flake's inputs in [`flake.nix`](./flake.nix) or to packages in one of the [`overlays/`](./overlays/).
 
-[`hosts/`](./hosts/) contains the main NixOS config modules for each host. Generally, there is one file for each host, but the [flake](./flake.nix) can be instructed to reuse the config for multiple hosts (in which case the module should probably interpret the `name` argument passed to it).
-Any `wip.preface.*` options have to be set in the first sub-module in these files (`## Hardware` section). \
-This flake only defines a single [`example`](./hosts/example.nix.md) host meant to demonstrate how other flakes can use the (NixOS) flake library framework.
-
-[`example/`](./example/) contains an example of adjusting the [installation](./example/install.sh.md) script for the hosts, and this flake's [default config](./example/defaultConfig/) (see [Namespacing](#namespacing-in-nixos)).
+[`hosts/`](./hosts/) contains example host definitions.
+[`example/`](./example/) currently only contains this flake's [default config](./example/defaultConfig/) (see [Namespacing](#namespacing-in-nixos)).
 
 
 ## Namespacing in NixOS

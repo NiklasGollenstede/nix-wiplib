@@ -24,7 +24,7 @@ For now, there is not much documentation, but here is at least a short / shorten
     nix = "PATH=${pkgs.openssh}/bin:$PATH ${pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes'";
 
 in pkgs.writeShellScriptBin "lineage-build-remote" ''
-    ${lib.wip.extractBashFunction (builtins.readFile lib.wip.setup-scripts.utils) "prepend_trap"}
+    ${lib.fun.extractBashFunction (builtins.readFile lib.inst.setup-scripts.utils) "prepend_trap"}
     set -u ; set -x
     baseDir=$1
 
@@ -102,31 +102,38 @@ in pkgs.writeShellScriptBin "lineage-build-remote" ''
 ```nix
 #*/# end of MarkDown, beginning of NixOS lib:
 dirname: inputs@{ self, nixpkgs, ... }: let
-    inherit (self) lib;
+    lib = inputs.self.lib.__internal__;
     defaultInputs = inputs;
 
     ## Hetzner VPS types, as of 2023-01: »cpu« in cores, »ram« in GB, »ssd« in GB, »ph« and »pm« price in €ct per hour (o/w VAT), »pm« monthly cap in € (about 26 - 27 days).
     #  Plus .1ct/h (.6€/m) for the IPv4 (TODO: could add a flag to do IPv6 only):
-    serverTypes = {
-         cx11 = { cpu =  1; ram =  2; ssd =  20; ph =   .6; pm =  3.92; };
-        cpx11 = { cpu =  2; ram =  2; ssd =  40; ph =   .7; pm =  4.58; };
-         cx21 = { cpu =  2; ram =  4; ssd =  40; ph =   .9; pm =  5.77; };
-        cpx21 = { cpu =  3; ram =  4; ssd =  80; ph =  1.3; pm =  8.39; };
-         cx31 = { cpu =  2; ram =  8; ssd =  80; ph =  1.7; pm = 10.95; };
-        cpx31 = { cpu =  4; ram =  8; ssd = 160; ph =  2.5; pm = 15.59; };
-         cx41 = { cpu =  4; ram = 16; ssd = 160; ph =  3.3; pm = 20.11; };
-        cpx41 = { cpu =  8; ram = 16; ssd = 240; ph =  4.9; pm = 29.39; };
-         cx51 = { cpu =  8; ram = 32; ssd = 240; ph =  6.4; pm = 38.56; };
-        cpx51 = { cpu = 16; ram = 32; ssd = 360; ph = 10.4; pm = 64.74; };
+    serverTypes = lib.mapAttrs (name: attrs: attrs // { inherit name; }) {
+        # Intel (Xeon Gold) CPUs:
+         cx11 = { isa = "x86_64";  cpu =  1; ram =  2; ssd =  20; ph =   .6; pm =  3.92; };
+         cx21 = { isa = "x86_64";  cpu =  2; ram =  4; ssd =  40; ph =   .9; pm =  5.77; };
+         cx31 = { isa = "x86_64";  cpu =  2; ram =  8; ssd =  80; ph =  1.7; pm = 10.95; };
+         cx41 = { isa = "x86_64";  cpu =  4; ram = 16; ssd = 160; ph =  3.3; pm = 20.11; };
+         cx51 = { isa = "x86_64";  cpu =  8; ram = 32; ssd = 240; ph =  6.4; pm = 38.56; };
+        # AMD (EPYC) CPUs:
+        cpx11 = { isa = "x86_64";  cpu =  2; ram =  2; ssd =  40; ph =   .7; pm =  4.58; };
+        cpx21 = { isa = "x86_64";  cpu =  3; ram =  4; ssd =  80; ph =  1.3; pm =  8.39; };
+        cpx31 = { isa = "x86_64";  cpu =  4; ram =  8; ssd = 160; ph =  2.5; pm = 15.59; };
+        cpx41 = { isa = "x86_64";  cpu =  8; ram = 16; ssd = 240; ph =  4.9; pm = 29.39; };
+        cpx51 = { isa = "x86_64";  cpu = 16; ram = 32; ssd = 360; ph = 10.4; pm = 64.74; };
+        # ARM (Ampere Altra) CPUs:
+        cax11 = { isa = "aarch64"; cpu =  2; ram =  4; ssd =  40; ph =   .6; pm =  3.92; };
+        cax21 = { isa = "aarch64"; cpu =  4; ram =  8; ssd =  80; ph =  1.1; pm =  7.13; };
+        cax31 = { isa = "aarch64"; cpu =  8; ram = 16; ssd = 160; ph =  2.3; pm = 14.27; };
+        cax41 = { isa = "aarch64"; cpu = 16; ram = 32; ssd = 320; ph =  4.6; pm = 28.55; };
     };
 
 
-in ({
+in let vps-worker = ({
     name, localName ? name,
     pkgs, # The nixpkgs instance used to build the worker management scripts.
     inputs ? defaultInputs, # The flake inputs used to evaluate the worker's config.
     inheritFrom ? null, # Optional nixOS configuration from which to inherit locale settings and the like.
-    serverType ? "cx21", issuerSystem ? pkgs.system, vpsSystem ? "x86_64-linux",
+    serverType ? serverTypes.cpx11, vpsSystem ? "${serverType.isa}-linux", buildPlatform ? vpsSystem, # pkgs.system
     tokenFile ? null, # File containing the Hetzner Cloud API token (»HCLOUD_TOKEN«). Only relevant if neither the environment variable »HCLOUD_TOKEN« nor the »tokenCmd« argument are set.
     tokenCmd ? (if tokenFile == null then "echo 'Environment variable HCLOUD_TOKEN must be set!' 1>&2 ; false" else "cat ${lib.escapeShellArg tokenFile}"),
     suppressCreateEmail ? true, # Suppress the email upon server creation. This requires the cloud project to have an SSH key named `dummy` (with any key value).
@@ -135,7 +142,7 @@ in ({
     nixosConfig ? { }, # Extra NixOS config to use when assembling the worker.
     debug ? false, ignoreKill ? debug,
 }: let
-    args = { inherit name localName pkgs inputs inheritFrom serverType issuerSystem vpsSystem tokenFile tokenCmd suppressCreateEmail keysOutPath useZfs swapPercent nixosConfig debug; };
+    args = { inherit name localName pkgs inputs inheritFrom serverType buildPlatform vpsSystem tokenFile tokenCmd suppressCreateEmail keysOutPath useZfs swapPercent nixosConfig debug; };
     esc = lib.escapeShellArg;
 
     hash = builtins.substring 0 8 (builtins.hashString "sha256" name); dataPart = if useZfs then "rpool-${hash}" else "local-${hash}";
@@ -144,8 +151,8 @@ in ({
         noFS = options.virtualisation?useDefaultFilesystems && config.virtualisation.useDefaultFilesystems;
     in [ nixosConfig ({
 
+        nixpkgs.hostPlatform = vpsSystem;
         system.stateVersion = builtins.substring 0 5 inputs.nixpkgs.lib.version; # really doesn't matter for these configs
-        wip.preface.hardware = builtins.replaceStrings [ "-linux" ] [ "" ] vpsSystem;
         wip.hardware.hetzner-vps.enable = true; # (this is where the interesting stuff happens)
         wip.base.enable = true;
 
@@ -154,9 +161,26 @@ in ({
             AuthorizedKeysFile /local/etc/ssh/loginKey.pub
         ''}";
         networking.firewall.logRefusedConnections = false; # it's super spam-my and pretty irrelevant
-        documentation.nixos.enable = lib.mkDefault false; # It just takes way to long to make these, and they rebuild way too often ...
         nix.nixPath = [ "nixpkgs=${inputs.nixpkgs}" ];
         nix.settings.experimental-features = [ "recursive-nix" "impure-derivations" ]; # might as well enable fun stuff
+
+    }) ({
+
+        documentation.nixos.enable = lib.mkDefault false; # It just takes way to long to make these, and they rebuild way too often ...
+        boot.enableContainers = config.containers != { }; # It i in fact not "at no cost if containers are not actually used"
+        environment.defaultPackages = lib.mkDefault [ ]; # default: nano perl rsync strace
+        programs.nano.syntaxHighlight = lib.mkDefault false; # depends on nano
+        system.disableInstallerTools = lib.mkDefault false; # "Disable nixos-rebuild, nixos-generate-config, nixos-installer and other NixOS tools."
+        hardware.enableRedistributableFirmware = lib.mkDefault false;
+        systemd.managerEnvironment.TZDIR = lib.mkIf (inheritFrom != null) (lib.mkForce "");
+        security.polkit.enable = lib.mkDefault false;
+        services.udisks2.enable = lib.mkDefault false;
+        security.sudo.enable = lib.mkDefault false;
+        i18n.supportedLocales = [ "C.UTF-8/UTF-8" ]; i18n.defaultLocale = "C";
+
+        xdg.sounds.enable = lib.mkDefault false;
+        xdg.mime.enable = lib.mkDefault false;
+        fonts.fontconfig.enable = lib.mkDefault false;
 
     }) (lib.mkIf (inheritFrom != null) {
 
@@ -165,29 +189,29 @@ in ({
         i18n.defaultLocale = inheritFrom.i18n.defaultLocale;
 
     }) (lib.mkIf (!noFS) { ## Basic FS Setup
-        wip.fs.boot.enable = true;
-        wip.fs.boot.size = "128M"; # will only ever store one boot configuration
-        wip.fs.temproot.enable = true;
+        setup.bootpart.enable = true;
+        setup.bootpart.size = if pkgs.system == "x86_64-linux" then "128M" else "256M"; # will only ever store one boot configuration
+        setup.temproot.enable = true;
         services.logind.extraConfig = "RuntimeDirectorySize=0\nRuntimeDirectoryInodesMax=0\n"; # adjusts the size of »/run/user/X/«
-        wip.fs.temproot.temp.mounts."/tmp".options = lib.mkIf (!useZfs) { size = 0; nr_inodes = 0; }; # nix build dirs get placed here, no this needs lots of space (but we have swap for that)
-        wip.fs.temproot.local = { type = "bind"; bind.base = "ext4"; }; # need to use an FS that can be resized (easily)
-        wip.fs.temproot.remote.type = "none"; # no need to ever back up anything
-        wip.fs.disks.devices.primary.size = lib.mkDefault (if useZfs then "2G" else "3G"); # define a small-ish disk (will get expanded upon boot)
-        wip.fs.temproot.swap = { asPartition = true; size = "128M"; }; # will get expanded upon boot
-        wip.fs.disks.partitions."swap-${hash}" = { index = 4; order = 250; }; # move swap part to the back, so that the start of the local part does not change when expanding both (swap can simply be re-created)
-        wip.fs.disks.partitions.${dataPart} = { index = 3; size = lib.mkForce "${toString ((lib.wip.parseSizeSuffix config.wip.fs.disks.devices.primary.size) / 1024 / 1024 - 512)}M"; }; # since this is no longer the last partition, it needs an explicit size
+        setup.temproot.temp.mounts."/tmp".options = lib.mkIf (!useZfs) { size = 0; nr_inodes = 0; }; # nix build dirs get placed here, no this needs lots of space (but we have swap for that)
+        setup.temproot.local = { type = "bind"; bind.base = "ext4"; }; # need to use an FS that can be resized (easily)
+        setup.temproot.remote.type = "none"; # no need to ever back up anything
+        setup.disks.devices.primary.size = lib.mkDefault (if useZfs then "2G" else "3G"); # define a small-ish disk (will get expanded upon boot)
+        setup.temproot.swap = { asPartition = true; size = "128M"; }; # will get expanded upon boot
+        setup.disks.partitions."swap-${hash}" = { index = 4; order = 250; }; # move swap part to the back, so that the start of the local part does not change when expanding both (swap can simply be re-created)
+        setup.disks.partitions.${dataPart} = { index = 3; size = lib.mkForce "${toString ((lib.fun.parseSizeSuffix config.setup.disks.devices.primary.size) / 1024 / 1024 - 512)}M"; }; # since this is no longer the last partition, it needs an explicit size
         fileSystems = lib.mkIf (!useZfs) { "/.local".autoResize = true; };
         security.pam.loginLimits = [ { domain = "*"; type = "-"; item = "nofile"; value = 1048576; } ]; # avoid "too many open files"
 
     }) (lib.mkIf (useZfs && !noFS) { ## ZFS
-        wip.fs.temproot.local.type = lib.mkForce "zfs";
-        wip.fs.zfs.datasets."rpool-${hash}".props = { compression = "zstd-2"; }; # zstd-2 => 1.95x, lz4 => 1.65x (on just the initial installation)
-        wip.fs.temproot.temp.type = "zfs";
-        wip.fs.zfs.datasets."rpool-${hash}/temp".props = { refreservation = lib.mkForce null; }; # (don't need that here)
-        wip.fs.keystore.enable = true;
-        wip.fs.keystore.keys."zfs/local" = "random";
-        wip.fs.keystore.keys."luks/keystore-${hash}/0" = "hostname"; # TODO: change
-        wip.fs.zfs.pools."rpool-${hash}".props = { autoexpand = "on"; };
+        setup.temproot.local.type = lib.mkForce "zfs";
+        setup.zfs.datasets."rpool-${hash}".props = { compression = "zstd-2"; }; # zstd-2 => 1.95x, lz4 => 1.65x (on just the initial installation)
+        setup.temproot.temp.type = "zfs";
+        setup.zfs.datasets."rpool-${hash}/temp".props = { refreservation = lib.mkForce null; }; # (don't need that here)
+        setup.keystore.enable = true;
+        setup.keystore.keys."zfs/local" = "random";
+        setup.keystore.keys."luks/keystore-${hash}/0" = "hostname"; # TODO: change
+        setup.zfs.pools."rpool-${hash}".props = { autoexpand = "on"; };
         boot.initrd.postMountCommands = ''zpool online -e rpool-${hash} /dev/disk/by-partlabel/rpool-${hash} || fail''; # in the initrd, this does not seem to do anything
         # TODO: use `services.zfs.expandOnBoot = [ "rpool-${hash}" ]`?
         systemd.services.zpool-expand = {
@@ -223,48 +247,37 @@ in ({
             # TODO: referencing »pkgs.*« directly bloats the initrd => use extraUtils instead (or just wait for systemd in initrd)
         in ''( set -x
             diskSize=$( blockdev --getsize64 /dev/sda )
-            sgdisk=' --zap-all --load-backup=${config.wip.fs.disks.partitioning}/primary.backup --move-second-header --delete ${toString config.wip.fs.disks.partitions.${dataPart}.index} --delete ${toString config.wip.fs.disks.partitions."swap-${hash}".index} '
+            sgdisk=' --zap-all --load-backup=${config.setup.disks.partitioning}/primary.backup --move-second-header --delete ${toString config.setup.disks.partitions.${dataPart}.index} --delete ${toString config.setup.disks.partitions."swap-${hash}".index} '
             partSize=$(( $diskSize / 1024 * ${toString (100 - swapPercent)} / 100 ))K
-            sgdisk="$sgdisk"' ${createPart config.wip.fs.disks.devices.primary config.wip.fs.disks.partitions.${dataPart}} '
+            sgdisk="$sgdisk"' ${createPart config.setup.disks.devices.primary config.setup.disks.partitions.${dataPart}} '
             partSize= # rest
-            sgdisk="$sgdisk"' ${createPart config.wip.fs.disks.devices.primary config.wip.fs.disks.partitions."swap-${hash}"} '
+            sgdisk="$sgdisk"' ${createPart config.setup.disks.devices.primary config.setup.disks.partitions."swap-${hash}"} '
             ${pkgs.gptfdisk}/bin/sgdisk $sgdisk /dev/sda
             ${pkgs.parted}/bin/partprobe /dev/sda || true
-            dd bs=440 conv=notrunc count=1 if=${pkgs.syslinux}/share/syslinux/mbr.bin of=/dev/sda status=none || fail
+            ${lib.optionalString (pkgs.system == "x86_64-linux") ''
+                dd bs=440 conv=notrunc count=1 if=${pkgs.syslinux}/share/syslinux/mbr.bin of=/dev/sda status=none || fail
+            ''}
 
             waitDevice /dev/disk/by-partlabel/swap-${hash}
             mkswap /dev/disk/by-partlabel/swap-${hash} || fail
         )'';
 
     }) ]; };
-    system = lib.wip.mkNixosConfiguration {
-        name = name; config = workerConfig;
-        preface.hardware = builtins.replaceStrings [ "-linux" ] [ "" ] vpsSystem;
-        inherit inputs; localSystem = issuerSystem;
-        renameOutputs = name: null; # (is not exported by the flake)
+    system = lib.inst.mkNixosConfiguration {
+        mainModule = workerConfig; inherit name;
+        inherit inputs; buildPlatform = if buildPlatform != vpsSystem then buildPlatform else null;
+        /* extraModules = [ {
+            installer.outputName = "";
+            boot.zfs.allowHibernation = lib.mkForce false;
+        } ]; */
     };
 
     mkScript = job: cmds: pkgs.writeShellScript "${job}-vps-${localName}.sh" ''
         export HCLOUD_TOKEN ; HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$( ${tokenCmd} )} || exit
         ${cmds}
     '';
-    prepend_trap = lib.wip.extractBashFunction (builtins.readFile lib.wip.setup-scripts.utils) "prepend_trap";
+    prepend_trap = lib.fun.extractBashFunction (builtins.readFile lib.inst.setup-scripts.utils) "prepend_trap";
     hcloud = "${pkgs.hcloud}/bin/hcloud";
-
-    ubuntu-init = pkgs.writeText "ubuntu-init" ''
-        #cloud-config
-        chpasswd: null
-        #ssh_pwauth: false
-        package_update: false
-        package_upgrade: false
-        ssh_authorized_keys:
-            - '@sshLoginPub@'
-        ssh_genkeytypes: [ ]
-        ssh_keys:
-            ed25519_public: '@sshSetupHostPub@'
-            ed25519_private: |
-        @sshSetupHostPriv_prefix8@
-    '';
 
     installTokenCmd = ''
         ( pw= ; read -s -p "Please paste the API token for VPS worker »"${esc localName}"«: " pw ; echo ; [[ ! $pw ]] || <<<"$pw" write-secret $mnt/${esc tokenFile} )
@@ -279,14 +292,14 @@ in ({
             ${pkgs.openssh}/bin/ssh-keygen -q -N "" -t ed25519 -f "$keys"/$ketName -C $ketName || exit
         done
 
-        SUDO_USER= ${lib.wip.writeSystemScripts { inherit system pkgs; }} deploy-system-to-hetzner-vps --inspect-cmd='
+        SUDO_USER= ${lib.inst.writeSystemScripts { inherit system pkgs; }} deploy-system-to-hetzner-vps --inspect-cmd='
             keys='$( printf %q "$keys" )' ; if [[ ''${args[no-vm]:-} ]] ; then keys=/tmp/shared ; fi # "no-vm" is set inside the VM
             mkdir -p $mnt/local/etc/ssh/ || exit
             cp -aT "$keys"/loginKey.pub  $mnt/local/etc/ssh/loginKey.pub || exit
             cp -aT "$keys"/hostKey       $mnt/local/etc/ssh/ssh_host_ed25519_key || exit
             cp -aT "$keys"/hostKey.pub   $mnt/local/etc/ssh/ssh_host_ed25519_key.pub || exit
             chown 0:0 $mnt/local/etc/ssh/* || exit
-        ' ''${forceVmBuild:+--vm} --vm-shared="$keys" ${if debug then "--trace" else "--quiet"} ${lib.optionalString ignoreKill "--vps-keep-on-build-failure"} ${lib.optionalString suppressCreateEmail "--vps-suppress-create-email"} "$@" -- ${esc name} ${esc serverType} || exit # --parallel-build-deploy
+        ' ''${forceVmBuild:+--vm} --vm-shared="$keys" ${if debug then "--trace" else "--quiet"} ${lib.optionalString ignoreKill "--vps-keep-on-build-failure"} ${lib.optionalString suppressCreateEmail "--vps-suppress-create-email"} "$@" -- ${esc name} ${esc serverType.name} || exit # --parallel-build-deploy
         rm "$keys"/hostKey || exit # don't need this anymore
 
         ip=$( ${hcloud} server ip ${esc name} ) ; echo "$ip" >"$keys"/ip
@@ -306,7 +319,7 @@ in ({
             "'ssh://root@'$( cat ${keysOutPath}/ip )'?compress=true'" # 1. URL (including the keys, the URL gets too ong to create the lockfile path)
             "i686-linux,x86_64-linux" # 2. platform type
             "${keysOutPath}/loginKey" # 3. SSH login key
-            "${toString (serverTypes.${serverType} or { cpu = 4; }).cpu}" # 4. max parallel builds
+            "${toString serverType.cpu}" # 4. max parallel builds
             "-" # 5. speed factor (relative to other builders, so irrelevant)
             "nixos-test,benchmark,big-parallel" # 6. builder supported features (no kvm)
             "-" # 7. job required features
@@ -320,7 +333,7 @@ in ({
         testCmd = ''PATH=${pkgs.openssh}/bin:$PATH ${pkgs.nix}/bin/nix --extra-experimental-features nix-command store ping --store ${urlArg}'';
     };
 
-    shell = pkgs.writeShellScriptBin "shell-${name}" ''
+    shell = (pkgs.writeShellScriptBin "shell-${name}" ''
         ${createScript} "$@" || exit ; trap ${killScript} EXIT || exit
 
         ${pkgs.bashInteractive}/bin/bash --init-file ${pkgs.writeText "init-${name}" ''
@@ -346,12 +359,16 @@ in ({
 
             PS1=''${PS1/\\$/\\[\\e[93m\\](${name})\\[\\e[97m\\]\\$} # append name to the prompt
         ''} || exit
-    '';
+    '').overrideAttrs (old: { passthru.worker = returns; });
 
     createScript = mkScript "create" cerateCmd;
     killScript = mkScript "kill" killCmd;
-in {
-    inherit args installTokenCmd cerateCmd sshCmd killCmd createScript killScript shell;
-    inherit remoteStore;
-    inherit workerConfig system;
-})
+    returns = {
+        inherit args installTokenCmd cerateCmd sshCmd killCmd createScript killScript shell;
+        inherit remoteStore;
+        inherit workerConfig system;
+    };
+in returns); in {
+    __functor = _: vps-worker;
+    inherit vps-worker serverTypes;
+}

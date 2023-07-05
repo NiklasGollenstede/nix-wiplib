@@ -4,13 +4,15 @@ set -o pipefail -u
 targetStore=${1:?} ; if [[ $targetStore != *://* ]] ; then targetStore='ssh://'$targetStore ; fi
 flakePath=$( @{pkgs.coreutils}/bin/realpath "${2:-.}" ) || exit
 
-# TODO: this only considers top-level inputs
-# TODO: the names in lock.nodes.* do not necessarily match those in inputs.* (there is the lock.nodes.root mapping)
 storePaths=( $( PATH=@{pkgs.git}/bin:$PATH @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --impure --expr 'let
     lock = builtins.fromJSON (builtins.readFile "'"$flakePath"'/flake.lock");
     flake = builtins.getFlake "'"$flakePath"'"; inherit (flake) inputs;
-in builtins.concatStringsSep " " ([ flake.outPath ] ++ (map (name: inputs.${name}.outPath) (
-    (builtins.filter (name: lock.nodes.${name}.original.type == "indirect") (builtins.attrNames inputs))
+    to-outPath = builtins.listToAttrs (map (input: { name = input.narHash; value = input.outPath; }) (let getInputs = flake: [ flake ] ++ (map getInputs (builtins.attrValues flake.inputs)); in flatten (map getInputs (builtins.attrValues inputs))));
+    flatten = x: if builtins.isList x then builtins.concatMap (y: flatten y) x else [ x ];
+in builtins.concatStringsSep " " ([ flake.outPath ] ++ (map (name: (
+    to-outPath.${lock.nodes.${name}.locked.narHash}
+)) (
+    builtins.filter (name: lock.nodes.${name}?original && (lock.nodes.${name}.original.type == "indirect" || lock.nodes.${name}.original.type == "path")) (builtins.attrNames lock.nodes)
 )))' --raw ) ) || exit
 : ${storePaths[0]:?}
 

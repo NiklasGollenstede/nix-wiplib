@@ -11,7 +11,7 @@ This wrapper makes it possible to apply a profile based on some option's values.
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module patch:
-dirname: inputs: specialArgs@{ config, pkgs, lib, ... }: let inherit (inputs.self) lib; in let
+dirname: inputs: moduleArgs@{ config, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
 in {
 
     imports = [

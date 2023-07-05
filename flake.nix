@@ -5,26 +5,30 @@
 ); inputs = {
 
     # To update »./flake.lock«: $ nix flake update
-    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-22.11"; };
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-23.05"; };
     nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; };
-    config = { type = "github"; owner = "NiklasGollenstede"; repo = "nix-wiplib"; dir = "example/defaultConfig"; rev = "5e9cc7ce3440be9ce6aeeaedcc70db9c80489c5f"; }; # Use some previous commit's »./example/defaultConfig/flake.nix« as the default config for this flake.
+    functions = { url = "github:NiklasGollenstede/nix-functions"; inputs.nixpkgs.follows = "nixpkgs"; };
+    installer = { url = "github:NiklasGollenstede/nixos-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.functions.follows = "functions"; };
+    config.url = "path:./example/defaultConfig";
 
-}; outputs = inputs: let patches = {
-
-    nixpkgs = [ # Can define a list of patches for each input here:
-        # { url = "https://github.com/NixOS/nixpkgs/pull/###.diff"; sha256 = inputs.nixpkgs.lib.fakeSha256; } # Path from URL.
-        # ./patches/nixpkgs-fix-systemd-boot-install.patch # Local path file. (use long native / direct path to ensure it only changes if the content does)
-        # ./patches/nixpkgs-test.patch # After »nix build«, check »result/inputs/nixpkgs/patched!« to see that these patches were applied.
-    ];
-
-}; in (import "${./.}/lib/flakes.nix" "${./.}/lib" inputs).patchFlakeInputsAndImportRepo inputs patches ./. (inputs@{ self, nixpkgs, ... }: repo@{ overlays, lib, ... }: let
-
+}; outputs = inputs@{ self, ... }: inputs.functions.lib.importRepo inputs ./. (repo@{ overlays, ... }: let
+    lib = repo.lib.__internal__;
 in [ # Run »nix flake show --allow-import-from-derivation« to see what this merges to:
     repo # lib.* nixosModules.* overlays.*
-    (lib.wip.mkSystemsFlake { inherit inputs; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems
-    (lib.wip.forEachSystem [ "aarch64-linux" "x86_64-linux" ] (localSystem: { # packages.*-linux.* defaultPackage.*-linux
-        packages = builtins.removeAttrs (lib.wip.getModifiedPackages (lib.wip.importPkgs inputs { system = localSystem; }) overlays) [ "libblockdev" ];
+
+    (lib.inst.mkSystemsFlake { inherit inputs; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems
+    (lib.fun.forEachSystem [ "aarch64-linux" "x86_64-linux" ] (localSystem: { # packages.*-linux.* defaultPackage.*-linux
+        packages = builtins.removeAttrs (lib.fun.getModifiedPackages (lib.fun.importPkgs inputs { system = localSystem; }) overlays) [ "libblockdev" ];
         defaultPackage = self.packages.${localSystem}.all-systems;
     }))
-    { patches = (lib.wip.importWrapped inputs "${self}/patches").result; } # patches.*
+    { patches = (lib.fun.importWrapped inputs "${self}/patches").result; } # patches.*
+
+    (lib.fun.forEachSystem [ "aarch64-linux" "x86_64-linux" ] (localSystem: let
+        pkgs = lib.fun.importPkgs inputs { system = localSystem; };
+    in {
+        packages.builder-shell = (lib.wip.vps-worker rec {
+            inherit pkgs inputs; name = "builder"; serverType = lib.wip.vps-worker.serverTypes.cax11;
+            debug = true; ignoreKill = true;
+        }).shell;
+    }))
 ]); }

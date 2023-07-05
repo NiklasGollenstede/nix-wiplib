@@ -9,21 +9,23 @@ Things that really should be (more like) this by default.
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: specialArgs@{ config, options, pkgs, lib, ... }: let inherit (inputs.self) lib; in let
-    prefix = inputs.config.prefix;
+dirname: inputs: moduleArgs@{ config, options, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
+    prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer;
     cfg = config.${prefix}.base;
-    outputName = specialArgs.outputName or null;
+    outputName = config.${installer}.outputName;
 in {
 
     options.${prefix} = { base = {
         enable = lib.mkEnableOption "saner defaults";
-        includeInputs = lib.mkOption { description = "The system's build inputs, to be included in the flake registry, and on the »NIX_PATH« entry, such that they are available for self-rebuilds and e.g. as »pkgs« on the CLI."; type = lib.types.attrsOf lib.types.anything; apply = lib.filterAttrs (k: v: v != null); default = { }; };
+        includeInputs = lib.mkOption { description = "The system's build inputs, to be included in the flake registry, and on the »NIX_PATH« entry, such that they are available for self-rebuilds and e.g. as »pkgs« on the CLI."; type = lib.types.attrsOf lib.types.anything; apply = lib.filterAttrs (k: v: v != null); default = (moduleArgs.inputs or config._module.args.inputs) // (if config.boot.isContainer then {
+            self = null; # avoid changing (and thus restarting) the containers on every trivial change
+        } else { }); };
         panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // { default = true; example = false; }; # It's stupidly hard to remove items from lists ...
-        autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${outputName}"; example = false; };
+        autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${config.${prefix}.installer.outputName}"; example = false; };
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // { default = true; example = false; };
     }; };
 
-    imports = lib.optional ((builtins.substring 0 5 inputs.nixpkgs.lib.version) <= "22.05") (lib.wip.overrideNixpkgsModule "misc/extra-arguments.nix" { } (old: { config._module.args.utils = old._module.args.utils // {
+    imports = lib.optional ((builtins.substring 0 5 inputs.nixpkgs.lib.version) <= "22.05") (lib.fun.overrideNixpkgsModule "misc/extra-arguments.nix" { } (old: { config._module.args.utils = old._module.args.utils // {
         escapeSystemdPath = s: let n = builtins.replaceStrings [ "/" "-" " " ] [ "-" "\\x2d" "\\x20" ] (lib.removePrefix "/" s); in if lib.hasPrefix "." n then "\\x2e" (lib.substring 1 (lib.stringLength (n - 1)) n) else n; # (a better implementation has been merged in 22.11)
     }; }));
 
@@ -47,7 +49,7 @@ in {
             if [[ -e /run/current-system ]] ; then ${pkgs.nix}/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig" ; fi
         ''; deps = [ "etc" ]; }; # (to deactivate this, set »system.activationScripts.diff-systems = lib.mkForce "";«)
 
-        virtualisation = lib.wip.mapMerge (vm: { ${vm} = let
+        virtualisation = lib.fun.mapMerge (vm: { ${vm} = let
             config' = config.virtualisation.${vm};
         in {
             virtualisation.graphics = lib.mkDefault false;
@@ -92,12 +94,13 @@ in {
 
         # Add all inputs to the flake registry:
         nix.registry = lib.mapAttrs (name: input: lib.mkDefault { flake = input; }) (builtins.removeAttrs cfg.includeInputs [ "self" ]);
+        system.extraDependencies = let getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues flake.inputs)); in lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)); # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
 
 
     }) (lib.mkIf (cfg.autoUpgrade) {
 
         nix.gc = { # gc everything older than 30 days, before updating
-            automatic = lib.mkDefault true; # let's hold back on this for a while
+            automatic = lib.mkDefault true;
             options = lib.mkDefault "--delete-older-than 30d";
             dates = lib.mkDefault "Sun *-*-* 03:15:00";
         };
@@ -132,7 +135,7 @@ in {
                 } ; shift ; done
                 if (( ''${#pkgs[@]} == 0 )) ; then echo "$help" 1>&2 ; exit 1 ; fi
                 if (( "$#" == 0 )) ; then set -- bash --login ; fi
-                nix-shell --run "$( printf ' %q' "$@" )" -p "''${pkgs[@]}"
+                ${pkgs.nix}/bin/nix-shell --run "$( printf ' %q' "$@" )" -p "''${pkgs[@]}"
                 #function run { bash -xc "$( printf ' %q' "$@" )" ; }
             ''; # »with« doesn't seem to be a common linux command yet, and it makes sense here: with package(s) => do stuff
 
@@ -143,7 +146,7 @@ in {
             lp = pkgs.writeShellScript "lp" ''abs="$(cd "$(dirname "$1")" ; pwd)"/"$(basename "$1")" ; ${pkgs.util-linux}/bin/namei -lx "$abs"''; # similar to »ll -d« on all path element from »$1« to »/«
 
             ips = "ip -c -br addr"; # colorized listing of all interface's IPs
-            mounts = pkgs.writeShellScript "mounts" ''${pkgs.util-linux}/bin/mount | ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/| on /var/lib/docker/|^/var/lib/snapd/snaps/' | LC_ALL=C ${pkgs.coreutils}/bin/sort -k3 | ${pkgs.util-linux}/bin/column -t -N Device/Source,on,Mountpoint,type,Type,Options -H on,type -W Device/Source,Mountpoint,Options''; # the output of »mount«, cleaned up and formatted as a sorted table
+            mounts = pkgs.writeShellScript "mounts" ''${pkgs.util-linux}/bin/mount | if [[ ''${1:-} ]] ; then ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/' | ${pkgs.gnugrep}/bin/grep -Pe ' on '"$1" ; else ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/| on /var/lib/docker/|^/var/lib/snapd/snaps/' ; fi | LC_ALL=C ${pkgs.coreutils}/bin/sort -k3 | ${pkgs.util-linux}/bin/column -t -N Device/Source,on,Mountpoint,type,Type,Options -H on,type -W Device/Source,Mountpoint,Options''; # the output of »mount«, cleaned up and formatted as a sorted table # (...grep ' on /'"''${1#/}")
 
             netns-exec = pkgs.writeShellScript "netns-exec" ''ns=$1 ; shift ; /run/wrappers/bin/firejail --noprofile --quiet --netns="$ns" -- "$@"''; # execute a command in a different netns (like »ip netns exec«), without requiring root permissions (but does require »config.programs.firejail.enable=true«)
 

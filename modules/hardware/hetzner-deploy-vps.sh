@@ -1,5 +1,9 @@
 
-## Builds the current system's (single »partitionDuringInstallation«ed) disk image and calls »deploy-image-to-hetzner-vps«. The installation heeds any »args« / CLI flags set.
+declare-command deploy-system-to-hetzner-vps name serverType << 'EOD'
+Builds the current system's (single »partitionDuringInstallation«ed) disk image and calls »deploy-image-to-hetzner-vps«. The installation heeds any »args« / CLI flags set.
+Requires the »HCLOUD_TOKEN« environment variable to be set.
+EOD
+declare-flag deploy-system-to-hetzner-vps parallel-build-deploy '' "Start initializing the VPS while its image is still being built. This is faster, but the server will be billed for the first hour even if the image build fails."
 function deploy-system-to-hetzner-vps { # 1: name, 2: serverType
 
     if [[ ! ${args[quiet]:-} ]] ; then echo 'Building the worker image' ; fi
@@ -10,7 +14,12 @@ function deploy-system-to-hetzner-vps { # 1: name, 2: serverType
     deploy-image-to-hetzner-vps "$1" "$2" "$image" ${args[parallel-build-deploy]:+"$buildPid"} || return
 }
 
-## Creates a new Hetzner Cloud VPS of name »name« and type/size »serverType«, optionally waits for »waitPid« to exit (successfully), copies the system image from the local »imagePath« to the new VPS, boots it, and waits until port 22 is open.
+declare-command deploy-image-to-hetzner-vps name serverType imagePath waitPid? << 'EOD'
+Creates a new Hetzner Cloud VPS of name »name« and type/size »serverType«, optionally waits for »waitPid« to exit (successfully), copies the system image from the local »imagePath« to the new VPS, boots it, and waits until its port 22 is open.
+Requires the »HCLOUD_TOKEN« environment variable to be set.
+EOD
+declare-flag deploy-image-to-hetzner-vps vps-keep-on-build-failure '' "Do not delete the VPS if the deployment fails. Useful only for debugging (and dangerous otherwise, because the server resource is simply being \"leaked\")."
+declare-flag deploy-image-to-hetzner-vps vps-suppress-create-email '' "Prevent hetzner from sending an email with a (useless) root password for the new server to the account owner by setting the server's »ssh-key« option to »dummy«. A key of that name has to exist in »HCLOUD_TOKEN«'s cloud project."
 function deploy-image-to-hetzner-vps { # 1: name, 2: serverType, 3: imagePath, 4?: waitPid
     local name=$1 serverType=$2 imagePath=$3 waitPid=${4:-}
     local stdout=/dev/stdout ; if [[ ${args[quiet]:-} ]] ; then stdout=/dev/null ; fi

@@ -4,7 +4,7 @@
 
 Device specific config for any 64bit capable Raspberry PI (esp. rPI4 and CM4, but also 3B(+) and Zero 2, maybe others).
 
-To set up a rPI host, connect it's boot medium (USB SSD or microSD card) to some other host, and run [`install-system`](../../lib/setup-scripts/README.md#install-system-documentation), directly targeting the future boot medium.
+To set up a rPI host, connect it's boot medium (USB SSD or microSD card) to some other host, and run [`install-system`](https://github.com/NiklasGollenstede/nixos-installer), directly targeting the future boot medium.
 
 
 ## Notes
@@ -20,7 +20,7 @@ To set up a rPI host, connect it's boot medium (USB SSD or microSD card) to some
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: args@{ config, pkgs, lib, ... }: let inherit (inputs.self) lib; in let
+dirname: inputs: args@{ config, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = inputs.config.prefix;
     cfg = config.${prefix}.hardware.raspberry-pi;
 in {

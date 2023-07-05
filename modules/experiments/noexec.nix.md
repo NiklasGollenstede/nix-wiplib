@@ -19,8 +19,8 @@ This is a (so far not successful) experiment to mount (almost) all filesystems a
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: specialArgs@{ config, pkgs, lib, name, ... }: let inherit (inputs.self) lib; in let
-    prefix = inputs.config.prefix;
+dirname: inputs: moduleArgs@{ config, pkgs, lib, name, ... }: let lib = inputs.self.lib.__internal__; in let
+    prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) setup;
     cfg = config.${prefix}.experiments.noexec;
 in {
 
@@ -33,14 +33,14 @@ in {
     in lib.mkIf cfg.enable (lib.mkMerge [ ({
 
         # This was the only "special" mount that did not have »nosuid« and »nodev« set:
-        systemd.packages = [ (lib.wip.mkSystemdOverride pkgs "dev-hugepages.mount" "[Mount]\nOptions=nosuid,nodev,noexec\n") ];
+        systemd.packages = [ (lib.fun.mkSystemdOverride pkgs "dev-hugepages.mount" "[Mount]\nOptions=nosuid,nodev,noexec\n") ];
         # And these were missing »noexec«:
         boot.specialFileSystems."/dev".options = [ "noexec" ];
         boot.specialFileSystems."/dev/shm".options = [ "noexec" ];
         boot.specialFileSystems."/run/keys".options = [ "noexec" ];
 
-        # Make all "real" FSs »noexec« (if »wip.fs.temproot.enable = true«):
-        ${prefix}.fs.temproot = let
+        # Make all "real" FSs »noexec« (if »setup.temproot.enable = true«):
+        ${setup}.temproot = let
             it = { mountOptions = { nosuid = true; noexec = true; nodev = true; }; };
         in { temp = it; local = it; remote = it; };
 

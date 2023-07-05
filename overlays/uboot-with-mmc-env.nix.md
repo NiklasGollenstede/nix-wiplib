@@ -10,7 +10,7 @@ A function reconfiguring an u-boot package to save its env on MMC (e.g. internal
 ```nix
 #*/# end of MarkDown, beginning of NixPkgs overlay:
 dirname: inputs: final: prev: let
-    inherit (final) pkgs; inherit (inputs.self) lib;
+    inherit (final) pkgs; lib = inputs.self.lib.__internal__;
 in {
 
     uboot-with-mmc-env = {

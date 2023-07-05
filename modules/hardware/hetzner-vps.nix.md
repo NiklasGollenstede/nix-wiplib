@@ -14,10 +14,11 @@ Since the VPSes are qemu VMs, the systems can quite accurately be tested locally
 Once the system works locally, a fresh installation can be deployed to a new VPS:
 ```bash
  HCLOUD_TOKEN=... nix run '.#<hostname>' -- deploy-system-to-hetzner-vps '<server-name>' '<server-type>'
+ nix run '.#<hostname>' -- --help # for more details
 ```
 Or deploy an existing image using `deploy-image-to-hetzner-vps`. The `HCLOUD_TOKEN` needs to be created in the cloud console, is specific to the cloud project, has to have write access, and can be revoked after the installation.
 
-Alternatively, manually create a new server instance, boot it into rescue mode, and copy the [installed](../../lib/setup-scripts/README.md#install-system-documentation) image to it:
+Alternatively, manually create a new server instance, boot it into rescue mode, and copy the installed image to it:
 ```bash
 cat $image | zstd | ssh $newServerIP 'zstdcat >/dev/sda && sync'
 ```
@@ -30,8 +31,8 @@ Declaring a smaller image size and expanding it on boot may be a workaround, but
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: args@{ config, pkgs, lib, ... }: let inherit (inputs.self) lib; in let
-    prefix = inputs.config.prefix;
+dirname: inputs: args@{ config, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
+    prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer extlinux;
     cfg = config.${prefix}.hardware.hetzner-vps;
 in {
 
@@ -41,10 +42,9 @@ in {
 
     config = lib.mkIf cfg.enable ({
 
-        ${prefix} ={
-            bootloader.extlinux.enable = true;
-            setup.scripts.hetzner-deploy.path = ./hetzner-deploy-vps.sh;
-        };
+        boot.loader.${extlinux}.enable = pkgs.system == "x86_64-linux";
+        boot.loader.systemd-boot.enable = pkgs.system == "aarch64-linux";
+        ${installer}.scripts.hetzner-deploy.path = ./hetzner-deploy-vps.sh;
 
         networking.interfaces.eth0.useDHCP = true;
         networking.interfaces.eth0.ipv6.routes = [ { address = "::"; prefixLength = 0; via = "fe80::1"; } ];

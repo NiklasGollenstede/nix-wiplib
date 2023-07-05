@@ -9,7 +9,7 @@ OpenSSH adds ~35MB closure size. Let's try `dropbear` instead!
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: { config, pkgs, lib, ... }: let inherit (inputs.self) lib; in let
+dirname: inputs: { config, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = inputs.config.prefix;
     cfg = config.${prefix}.services.dropbear;
 in {
@@ -73,7 +73,7 @@ in {
 
     }) (lib.mkIf (cfg.rootKeys != "") {
 
-        systemd.tmpfiles.rules = [ (lib.wip.mkTmpfile { type = "L+"; path = "/root/.ssh/authorized_keys"; argument = pkgs.writeText "root-ssh-authorized_keys" cfg.rootKeys; }) ];
+        systemd.tmpfiles.rules = [ (lib.fun.mkTmpfile { type = "L+"; path = "/root/.ssh/authorized_keys"; argument = pkgs.writeText "root-ssh-authorized_keys" cfg.rootKeys; }) ];
 
     }) ]);
 

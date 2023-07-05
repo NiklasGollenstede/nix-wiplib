@@ -21,7 +21,7 @@ Assuming `/dev/disk/by-partlabel/config-${...}` is placed at the same location t
 ```nix
 #*/# end of MarkDown, beginning of NixPkgs overlay:
 dirname: inputs: final: prev: let
-    inherit (final) pkgs; inherit (inputs.self) lib;
+    inherit (final) pkgs; lib = inputs.self.lib.__internal__;
 in {
 
     libubootenv = pkgs.stdenv.mkDerivation rec {
