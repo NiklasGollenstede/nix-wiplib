@@ -27,7 +27,7 @@ in {
 
     }: base.overrideAttrs (old: let
         envTxt = env: pkgs.writeText "uboot-env.txt" "${lib.concatStrings (lib.mapAttrsToList (k: v: if v == null then "" else "${k}=${toString v}\n") env)}";
-		defaultEnv' = (base.defaultEnv or { }) // defaultEnv;
+        defaultEnv' = (base.defaultEnv or { }) // defaultEnv;
     in {
         passthru = (old.passthru or { }) // {
             inherit envSize envOffset; defaultEnv = defaultEnv';
@@ -35,7 +35,9 @@ in {
             # Creates a (user) env blob for this u-boot by merging »env« over its »defaultEnv«. The resulting file can be flashed to »CONFIG_ENV_OFFSET« to replace the default env.
             mkEnv = env: pkgs.runCommandLocal "uboot-env.img" {
                 env = envTxt (defaultEnv' // env);
-            } "${pkgs.buildPackages.ubootTools}/bin/mkenvimage -p 0x00 -s ${toString envSize} -o $out $env";
+            } "${pkgs.buildPackages.ubootTools.overrideAttrs (old: {
+                buildInputs = (old.buildInputs or [ ]) ++ [ pkgs.openssl ];
+            })}/bin/mkenvimage -p 0x00 -s ${toString envSize} -o $out $env";
 
         };
         extraConfig = (old.extraConfig or "") + "${lib.concatStringsSep "\n" ([
@@ -51,9 +53,6 @@ in {
             # Set CONFIG_EXTRA_ENV_SETTINGS just before it's used, to make sure it actually applies:
             printf "%s\n%s\n" "#define CONFIG_EXTRA_ENV_SETTINGS $CONFIG_EXTRA_ENV_SETTINGS" "$(cat include/env_default.h)" >include/env_default.h
         '';
-	});
+    });
 
-	ubootTools = prev.ubootTools.overrideAttrs (old: {
-        buildInputs = (old.buildInputs or [ ]) ++ [ final.openssl ];
-	});
 }

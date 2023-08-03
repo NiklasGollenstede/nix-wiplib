@@ -94,7 +94,7 @@ in {
 
         # Add all inputs to the flake registry:
         nix.registry = lib.mapAttrs (name: input: lib.mkDefault { flake = input; }) (builtins.removeAttrs cfg.includeInputs [ "self" ]);
-        system.extraDependencies = let getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues flake.inputs)); in lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)); # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
+        system.extraDependencies = let getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues (flake.inputs or { }))); in lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)); # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
 
 
     }) (lib.mkIf (cfg.autoUpgrade) {

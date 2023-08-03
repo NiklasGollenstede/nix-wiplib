@@ -1,12 +1,24 @@
-# 1: targetStore, 2?: flakePath
+# 1: targetStore, 2?: flakeSpec
 
 set -o pipefail -u
-targetStore=${1:?} ; if [[ $targetStore != *://* ]] ; then targetStore='ssh://'$targetStore ; fi
-flakePath=$( @{pkgs.coreutils}/bin/realpath "${2:-.}" ) || exit
+
+targetStore=${1:?}
+if [[ $targetStore != *://* ]] ; then
+    targetStore='ssh://'$targetStore
+fi
+
+flakeSpec=${2:-.}
+if [[ $flakeSpec == git+file:///* ]] ; then
+    flakeLock=${flakeSpec##git+file://}
+    flakeLock=${flakeLock/?dir=//}/flake.lock
+else
+    flakeSpec=$( @{pkgs.coreutils}/bin/realpath "$flakeSpec" ) || exit
+    flakeLock=$flakeSpec/flake.lock
+fi
 
 storePaths=( $( PATH=@{pkgs.git}/bin:$PATH @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --impure --expr 'let
-    lock = builtins.fromJSON (builtins.readFile "'"$flakePath"'/flake.lock");
-    flake = builtins.getFlake "'"$flakePath"'"; inherit (flake) inputs;
+    lock = builtins.fromJSON (builtins.readFile "'"$flakeLock"'");
+    flake = builtins.getFlake "'"$flakeSpec"'"; inherit (flake) inputs;
     to-outPath = builtins.listToAttrs (map (input: { name = input.narHash; value = input.outPath; }) (let getInputs = flake: [ flake ] ++ (map getInputs (builtins.attrValues flake.inputs)); in flatten (map getInputs (builtins.attrValues inputs))));
     flatten = x: if builtins.isList x then builtins.concatMap (y: flatten y) x else [ x ];
 in builtins.concatStringsSep " " ([ flake.outPath ] ++ (map (name: (
