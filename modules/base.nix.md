@@ -46,7 +46,7 @@ in {
         ''); # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)
 
         system.activationScripts.diff-systems = { text = ''
-            if [[ -e /run/current-system ]] ; then ${pkgs.nix}/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig" ; fi
+            if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix ]] ; then $systemConfig/sw/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig" ; fi
         ''; deps = [ "etc" ]; }; # (to deactivate this, set »system.activationScripts.diff-systems = lib.mkForce "";«)
 
         virtualisation = lib.fun.mapMerge (vm: { ${vm} = let
@@ -73,8 +73,16 @@ in {
         # Importing »<nixpkgs>« as non-flake returns a lambda returning the evaluated Nix Package Collection (»pkgs«). The most accurate representation of what that should be on the target host is the »pkgs« constructed when building it:
         system.extraSystemBuilderCmds = ''
             ln -sT ${pkgs.writeText "pkgs.nix" ''
-                # Provide the exact same version of (nix)pkgs on the CLI as in the NixOS-configuration (but note that this ignores the args passed to it; and it'll be a bit slower, as it partially evaluates the host's configuration):
-                args: (builtins.getFlake ${builtins.toJSON cfg.includeInputs.self}).nixosConfigurations.${outputName}.pkgs
+                # Provide the exact same version (except for modifications by »args«) of (nix)pkgs on the CLI as in the NixOS-configuration (this may be quite a bit slower than merely »import inputs.nixpkgs«, as it partially evaluates the host's configuration):
+                let
+                    system = (builtins.getFlake ${builtins.toJSON cfg.includeInputs.self}).nixosConfigurations.${outputName};
+                    nixpkgs = import ${builtins.toJSON cfg.includeInputs.nixpkgs};
+                in args: nixpkgs ({
+                    inherit (system.config.nixpkgs) config; # TODO: some good merging logic on this would be nice
+                } // args // {
+                    overlays = (args.overlays or [ ]) ++ system.config.nixpkgs.overlays;
+                })
+                # args: (system.extendModules { modules = [ { config.nixpkgs = args; _file = "<nixpkgs-args>"; } ]; })._module.args.pkgs
             ''} $out/pkgs # (nixpkgs with overlays)
         ''; # (use this indirection so that all open shells update automatically)
 
@@ -101,7 +109,7 @@ in {
 
         nix.gc = { # gc everything older than 30 days, before updating
             automatic = lib.mkDefault true;
-            options = lib.mkDefault "--delete-older-than 30d";
+            options = lib.mkDefault "--delete-older-than 30d"; # TODO: Make sure to always keep an entry pointing to /run/booted-system (cuz that is the only one _known_ to boot). Also, is this GCing systems still referenced from the bootloader entries?
             dates = lib.mkDefault "Sun *-*-* 03:15:00";
         };
         nix.settings = { keep-outputs = true; keep-derivations = true; }; # don't GC build-time dependencies
@@ -121,23 +129,7 @@ in {
 
         environment.shellAliases = {
 
-            "with" = pkgs.writeShellScript "with" ''
-                help='Synopsys: With the Nix packages »PKGS« (as attribute path read from the imported »nixpkgs« specified on the »NIX_PATH«), run »CMD« with »ARGS«, or »bash --login« if no »CMD« is supplied. In the second form, »CMD« is the same as the last »PKGS« entry.
-                Usage: with [-h] PKGS... [-- [CMD [ARGS...]]]
-                       with [-h] PKGS... [. [ARGS...]]'
-                pkgs=( ) ; while (( "$#" > 0 )) ; do {
-                    if [[ $1 == -h ]] ; then echo "$help" ; exit 0 ; fi
-                    if [[ $1 == -- ]] ; then shift ; break ; fi
-                    if [[ $1 == . ]] ; then
-                        shift ; (( ''${#pkgs[@]} == 0 )) || set -- "''${pkgs[-1]}" "$@" ; break
-                    fi
-                    pkgs+=( "$1" )
-                } ; shift ; done
-                if (( ''${#pkgs[@]} == 0 )) ; then echo "$help" 1>&2 ; exit 1 ; fi
-                if (( "$#" == 0 )) ; then set -- bash --login ; fi
-                ${pkgs.nix}/bin/nix-shell --run "$( printf ' %q' "$@" )" -p "''${pkgs[@]}"
-                #function run { bash -xc "$( printf ' %q' "$@" )" ; }
-            ''; # »with« doesn't seem to be a common linux command yet, and it makes sense here: with package(s) => do stuff
+            "with" = "source ${../overlays/scripts/with.sh} ; unalias with ; with"; # »with« doesn't seem to be a common unix command yet, and it makes sense here: with package(s) => do stuff
 
             ls = "ls --color=auto"; # (default)
             l  = "ls -alhF"; # (added F)
@@ -158,8 +150,8 @@ in {
             scu = "systemctl start"; # up
             scd = "systemctl stop"; # down
             scr = "systemctl restart";
-            scf = "systemctl list-units --failed";
-            scj = "journalctl -b -f -u";
+            scf = "systemctl list-units --state error --state bad --state bad-setting --state failed --state auto-restart"; # ("auto-restart" is waiting to be restarted (i.e, has RestartSec and and the rate limit was not yet reached). I don't know how to query "previous activation failed" _while_ the unit is activating.)
+            scj = "journalctl -b -f -n 20 -u";
 
         };
 

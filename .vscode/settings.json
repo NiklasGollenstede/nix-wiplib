@@ -25,12 +25,12 @@
 		"dtparam", // option
 		"eeprom", // abbr
 		"enableRedistributableFirmware", // nixpkgs
-		"firmwareLinuxNonfree", // nixpkgs
 		"expandsz", // zfs property
 		"extlinux", // program
 		"fetchurl", // nix function
 		"filesystems", // plural
 		"firejail", // program
+		"firmwareLinuxNonfree", // nixpkgs
 		"foldl", // nix (fold left)
 		"foldr", // nix (fold right)
 		"fstrim", // program
@@ -39,6 +39,7 @@
 		"fw_setenv", // program
 		"genkeytypes", // concat
 		"getsize64", // cli arg
+		"getty", // program
 		"gnugrep", // package
 		"gnused", // package
 		"gollenstede", // name
@@ -120,6 +121,7 @@
 		"udev", // program
 		"udptunnel", // program
 		"UEFI", // abbr
+		"unalias", // bash
 		"urandom", // linux
 		"usbhid", // kmod
 		"vcgencmd", // program

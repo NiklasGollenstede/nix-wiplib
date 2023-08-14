@@ -70,7 +70,7 @@ Often, the concept expressed by a source code file is at least as important as t
 Embedding the source code "file" within a MarkDown file emphasizes the importance of textual expressions of the motivation and context of each piece of source code, and should thus incentivize writing sufficient documentation.
 Having the documentation right next to the code should also help against documentation rot.
 
-Technically, Nix (and most other code files) don't need to have any specific file extension. By embedding the MarkDown header in a block comment, the file can still be a valid source code file, while the MarDown header ending in a typed code block ensures proper syntax highlighting of the source code in editors or online repos.
+Technically, Nix (and most other code files) don't need to have any specific file extension. By embedding the MarkDown header in a block comment, the file can still be a valid source code file, while the MarkDown header ending in a typed code block ensures proper syntax highlighting of the source code in editors or online repos.
 
 
 ## Notepad
@@ -82,7 +82,3 @@ pkgs = import <nixpkgs> { }
 :lf . # load CWD's flake's outputs as variables
 pkgs = nixosConfigurations.target.pkgs
 ```
-
-
-### TODOs
-
