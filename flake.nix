@@ -9,6 +9,7 @@
     nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; };
     functions = { url = "github:NiklasGollenstede/nix-functions"; inputs.nixpkgs.follows = "nixpkgs"; };
     installer = { url = "github:NiklasGollenstede/nixos-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.functions.follows = "functions"; };
+    systems.url = "github:nix-systems/default-linux";
     config.url = "path:./example/defaultConfig";
 
 }; outputs = inputs@{ self, ... }: inputs.functions.lib.importRepo inputs ./. (repo@{ overlays, ... }: let
@@ -17,18 +18,17 @@ in [ # Run »nix flake show --allow-import-from-derivation« to see what this me
     repo # lib.* nixosModules.* overlays.*
 
     (lib.inst.mkSystemsFlake { inherit inputs; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems
-    (lib.fun.forEachSystem [ "aarch64-linux" "x86_64-linux" ] (localSystem: { # packages.*-linux.* defaultPackage.*-linux
-        packages = builtins.removeAttrs (lib.fun.getModifiedPackages (lib.fun.importPkgs inputs { system = localSystem; }) overlays) [ "libblockdev" ];
-        defaultPackage = self.packages.${localSystem}.all-systems;
-    }))
+    { packages = lib.fun.packagesFromOverlay { inherit inputs; }; } # packages.*.*
     { patches = (lib.fun.importWrapped inputs "${self}/patches").result; } # patches.*
 
-    (lib.fun.forEachSystem [ "aarch64-linux" "x86_64-linux" ] (localSystem: let
-        pkgs = lib.fun.importPkgs inputs { system = localSystem; };
-    in {
-        packages.builder-shell = (lib.wip.vps-worker rec {
-            inherit pkgs inputs; name = "builder"; serverType = lib.wip.vps-worker.serverTypes.cax11;
-            debug = true; ignoreKill = true;
-        }).shell;
+    (lib.fun.forEachSystem (import inputs.systems) (localSystem: {
+        packages.default = self.packages.${localSystem}.all-systems;
     }))
+
+    (lib.fun.forEachSystem (import inputs.systems) (localSystem: let
+        pkgs = lib.fun.importPkgs inputs { system = localSystem; };
+    in { packages.builder-shell = (lib.wip.vps-worker rec {
+        inherit pkgs inputs; name = "builder"; serverType = lib.wip.vps-worker.serverTypes.cax11;
+        debug = true; ignoreKill = true;
+    }).shell; }))
 ]); }

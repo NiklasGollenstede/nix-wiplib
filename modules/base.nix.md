@@ -20,8 +20,10 @@ in {
         includeInputs = lib.mkOption { description = "The system's build inputs, to be included in the flake registry, and on the »NIX_PATH« entry, such that they are available for self-rebuilds and e.g. as »pkgs« on the CLI."; type = lib.types.attrsOf lib.types.anything; apply = lib.filterAttrs (k: v: v != null); default = (moduleArgs.inputs or config._module.args.inputs) // (if config.boot.isContainer then {
             self = null; # avoid changing (and thus restarting) the containers on every trivial change
         } else { }); };
+        selfInputName = lib.mkOption { type = lib.types.nullOr lib.types.str; default = "nixos-config"; };
         panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // { default = true; example = false; }; # It's stupidly hard to remove items from lists ...
         autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${config.${prefix}.installer.outputName}"; example = false; };
+        ensureBootableEntry = lib.mkEnableOption "a boot loader entry that always points at the system last booted when the bootloader was applied" // { default = true; example = false; };
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // { default = true; example = false; };
     }; };
 
@@ -40,6 +42,7 @@ in {
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
         services.getty.helpLine = lib.mkForce "";
+        systemd.services.rtkit-daemon = lib.mkIf (config.security.rtkit.enable) { serviceConfig.LogLevelMax = lib.mkDefault "warning"; }; # spams, and probably irrelevant
 
         system.extraSystemBuilderCmds = (if !config.boot.initrd.enable then "" else ''
             ln -sT ${builtins.unsafeDiscardStringContext config.system.build.bootStage1} $out/boot-stage-1.sh # (this is super annoying to locate otherwise)
@@ -101,7 +104,25 @@ in {
         '';
 
         # Add all inputs to the flake registry:
-        nix.registry = lib.mapAttrs (name: input: lib.mkDefault { flake = input; }) (builtins.removeAttrs cfg.includeInputs [ "self" ]);
+        nix.registry = lib.mapAttrs (name: input: lib.mkDefault { flake = input; }) (
+            (lib.optionalAttrs (cfg.includeInputs?self) { ${cfg.selfInputName} = cfg.includeInputs.self; })
+            // (builtins.removeAttrs cfg.includeInputs [ "self" ])
+        ) // (lib.optionalAttrs (cfg.selfInputName != null && outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}) { syspkgs.flake = pkgs.runCommandLocal "syspkgs" {
+            flake_nix = ''{ outputs = { ${cfg.selfInputName}, ... }: {
+                legacyPackages.${pkgs.system} = nixos-config.nixosConfigurations.${outputName}.pkgs;
+            }; }'';
+            flake_lock = let lock = lib.importJSON "${cfg.includeInputs.self}/flake.lock" ; in builtins.toJSON {
+                inherit (lock) version; root = "root"; nodes = (lib.mapAttrs (k: dep: dep // (lib.optionalAttrs (dep?inputs) {
+                inputs = lib.mapAttrs (k: ref: if lib.isString ref then ref else [ cfg.selfInputName ] ++ ref) dep.inputs;
+            })) lock.nodes) // { ${cfg.selfInputName} = {
+                inputs = lock.nodes.root.inputs; original = { id = "nixos-config"; type = "indirect"; };
+                locked = { inherit (cfg.includeInputs.self) lastModified narHash; type = "path"; path = cfg.includeInputs.self.outPath; };
+            }; root.inputs = { ${cfg.selfInputName} = cfg.selfInputName; }; }; };
+        } ''
+            mkdir $out
+            <<<"$flake_nix" cat > $out/flake.nix
+            <<<"$flake_lock" cat > $out/flake.lock
+        ''; });
         system.extraDependencies = let getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues (flake.inputs or { }))); in lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)); # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
 
 
@@ -109,10 +130,16 @@ in {
 
         nix.gc = { # gc everything older than 30 days, before updating
             automatic = lib.mkDefault true;
-            options = lib.mkDefault "--delete-older-than 30d"; # TODO: Make sure to always keep an entry pointing to /run/booted-system (cuz that is the only one _known_ to boot). Also, is this GCing systems still referenced from the bootloader entries?
+            options = lib.mkDefault "--delete-older-than 30d";
             dates = lib.mkDefault "Sun *-*-* 03:15:00";
         };
         nix.settings = { keep-outputs = true; keep-derivations = true; }; # don't GC build-time dependencies
+        systemd.services.nix-gc.script = lib.mkIf (cfg.ensureBootableEntry) (lib.mkBefore ''
+            ln -sfT /run/booted-system /nix/var/nix/profiles/system-2147483648-link
+            # The goal is to always keep a bootloader entry pointing to /run/booted-system (cuz that is the only one _known_ to boot).
+            # This (crudely) (almost) does that: it keeps the system that was last-booted the last time the bootloader was rebuilt (i.e., usually when the system was updated).
+            # The generations' age is determined by their *-link's modification time, and and nix assumes (asserts) that newer generations have higher numbers (2147483648 == 2**31).
+        '');
 
         system.autoUpgrade = {
             enable = lib.mkDefault true;

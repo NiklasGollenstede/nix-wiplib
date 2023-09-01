@@ -16,6 +16,8 @@ Then connect `$DISK` to a PI, boot it, and (not much, because nothing is install
 ```nix
 #*/# end of MarkDown, beginning of NixOS config flake input:
 dirname: inputs: { config, pkgs, lib, name, ... }: let lib = inputs.self.lib.__internal__; in let
+
+
 in { imports = [ ({ ## Hardware
 
     nixpkgs.hostPlatform = "aarch64-linux"; system.stateVersion = "23.05";

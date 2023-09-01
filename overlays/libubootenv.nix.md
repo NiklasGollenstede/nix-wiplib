@@ -2,16 +2,16 @@
 
 # `libubootenv` - Library to access U-Boot environment
 
-As an `environment.systemPackages` entry this provides the `fw_printenv` / `fw_setenv` commands to work with U-Boot's environment variables.
+This provides the `fw_printenv` / `fw_setenv` commands to work with U-Boot's environment variables.
 
 
 ## Example
 
-Assuming `/dev/disk/by-partlabel/config-${...}` is placed at the same location that U-Boot was configured (via `CONFIG_ENV_OFFSET` and `CONFIG_ENV_SIZE`) to expect/save the environment:
+Assuming `/dev/disk/by-partlabel/uboot-env` is placed at the same location that U-Boot was configured (via `CONFIG_ENV_OFFSET` and `CONFIG_ENV_SIZE`) to expect/save the environment:
 ```nix
-{
+let toHex = num: lib.concatMapStrings toString (lib.toBaseDigits 16 num); in {
     environment.systemPackages = [ pkgs.libubootenv ];
-    environment.etc."fw_env.config".text = "/dev/disk/by-partlabel/config-${...} 0x0 0x${lib.concatStrings (map toString (lib.toBaseDigits 16 envSize))}";
+    environment.etc."fw_env.config".text = "/dev/disk/by-partlabel/uboot-env 0x0 0x${toHex CONFIG_ENV_SIZE}";
 }
 ```
 

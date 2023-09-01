@@ -40,6 +40,7 @@
 		"genkeytypes", // concat
 		"getsize64", // cli arg
 		"getty", // program
+		"github", // name
 		"gnugrep", // package
 		"gnused", // package
 		"gollenstede", // name
@@ -104,6 +105,7 @@
 		"rpiboot", // package
 		"rpool", // zfs
 		"rprivate", // linux
+		"rtkit", // program
 		"sbabic", // name
 		"sgdisk", // program
 		"stdenv", // nix

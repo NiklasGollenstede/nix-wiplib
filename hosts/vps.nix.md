@@ -18,6 +18,8 @@ See `nix run .#vps -- --help` for options and more commands.
 dirname: inputs: { config, pkgs, lib, name, ... }: let lib = inputs.self.lib.__internal__; in let
 in { preface = {
     instances = [ "vps" "vps-aarch64" ];
+
+
 }; imports = [ ({ ## Hardware
 
     nixpkgs.hostPlatform = if name == "vps" then "x86_64-linux" else "aarch64-linux"; system.stateVersion = "23.05";
