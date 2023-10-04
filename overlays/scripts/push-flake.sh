@@ -19,7 +19,7 @@ fi
 storePaths=( $( PATH=@{pkgs.git}/bin:$PATH @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --impure --expr 'let
     lock = builtins.fromJSON (builtins.readFile "'"$flakeLock"'");
     flake = builtins.getFlake "'"$flakeSpec"'"; inherit (flake) inputs;
-    to-outPath = builtins.listToAttrs (map (input: { name = input.narHash; value = input.outPath; }) (let getInputs = flake: [ flake ] ++ (map getInputs (builtins.attrValues flake.inputs)); in flatten (map getInputs (builtins.attrValues inputs))));
+    to-outPath = builtins.listToAttrs (map (input: { name = input.narHash; value = input.outPath; }) (let getInputs = flake: [ flake ] ++ (map getInputs (builtins.attrValues (flake.inputs or { }))); in flatten (map getInputs (builtins.attrValues inputs))));
     flatten = x: if builtins.isList x then builtins.concatMap (y: flatten y) x else [ x ];
 in builtins.concatStringsSep " " ([ flake.outPath ] ++ (map (name: (
     to-outPath.${lock.nodes.${name}.locked.narHash}

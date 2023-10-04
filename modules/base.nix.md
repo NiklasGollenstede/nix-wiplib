@@ -23,7 +23,7 @@ in {
         selfInputName = lib.mkOption { type = lib.types.nullOr lib.types.str; default = "nixos-config"; };
         panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // { default = true; example = false; }; # It's stupidly hard to remove items from lists ...
         autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${config.${prefix}.installer.outputName}"; example = false; };
-        ensureBootableEntry = lib.mkEnableOption "a boot loader entry that always points at the system last booted when the bootloader was applied" // { default = true; example = false; };
+        preserveBootedGeneration = lib.mkEnableOption "a boot loader entry that always points at the system last booted when the bootloader was applied" // { default = true; example = false; };
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // { default = true; example = false; };
     }; };
 
@@ -134,12 +134,31 @@ in {
             dates = lib.mkDefault "Sun *-*-* 03:15:00";
         };
         nix.settings = { keep-outputs = true; keep-derivations = true; }; # don't GC build-time dependencies
-        systemd.services.nix-gc.script = lib.mkIf (cfg.ensureBootableEntry) (lib.mkBefore ''
-            ln -sfT /run/booted-system /nix/var/nix/profiles/system-2147483648-link
-            # The goal is to always keep a bootloader entry pointing to /run/booted-system (cuz that is the only one _known_ to boot).
-            # This (crudely) (almost) does that: it keeps the system that was last-booted the last time the bootloader was rebuilt (i.e., usually when the system was updated).
-            # The generations' age is determined by their *-link's modification time, and and nix assumes (asserts) that newer generations have higher numbers (2147483648 == 2**31).
+        systemd.services.nix-gc.script = lib.mkIf cfg.preserveBootedGeneration (lib.mkForce ''
+            set -x
+            # The booted generation is the only one _known_ to actually boot.
+            # Therefore, save the booted-generation link:
+            tmp=$( mktemp --dry-run ) && trap 'rm -rf $tmp' EXIT
+            bootedSystem=$( readlink /run/booted-system ) || true
+            bootedGen= ; if [[ $bootedSystem ]] ; then for gen in /nix/var/nix/profiles/system-*-link ; do
+                if [[ $( readlink "$gen" ) == "$bootedSystem" ]] ; then bootedGen=$gen ; break ; fi
+            done ; fi
+            if [[ $bootedGen ]] ; then
+                cp -aT "$bootedGen" "$tmp"
+            fi
+
+            # (do the normal GC stuff:)
+            ${config.nix.package.out}/bin/nix-collect-garbage ${config.nix.gc.options}
+
+            # Ad _if_ the booted generation was deleted, restore it (the store path was preserved by the /run/booted-system gc-root):
+            if [[ $bootedGen && ! -e $bootedGen ]] ; then
+                cp -aT "$tmp" "$bootedGen"
+            fi
         '');
+        # To fix the previous mess:
+        #$ ( cd /nix/var/nix/profiles ; for gen in system-214748*-link ; do num=$( <<<$gen grep -Poe '\d+' ) ; mv $gen system-$(( num + 172 - 2147483648 ))-link ; done )
+        #$ ln -sfT $( cd /nix/var/nix/profiles ; echo system-*-link | grep -Poe '[^ ]+$' ) /nix/var/nix/profiles/system
+        #$ cp -aT /run/booted-system /nix/var/nix/profiles/system-172-link # if it was evicted
 
         system.autoUpgrade = {
             enable = lib.mkDefault true;
@@ -156,7 +175,7 @@ in {
 
         environment.shellAliases = {
 
-            "with" = "source ${../overlays/scripts/with.sh} ; unalias with ; with"; # »with« doesn't seem to be a common unix command yet, and it makes sense here: with package(s) => do stuff
+            "with" = "source ${../overlays/scripts/with.sh} ; unalias with ; complete -D with ; with"; # »with« doesn't seem to be a common unix command yet, and it makes sense here: with package(s) => do stuff
 
             ls = "ls --color=auto"; # (default)
             l  = "ls -alhF"; # (added F)
