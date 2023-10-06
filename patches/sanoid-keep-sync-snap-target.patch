@@ -1,0 +1,24 @@
+diff --git a/syncoid b/syncoid
+index 3f112de..68bf712 100755
+# Adds the »--keep-sync-snap-source/target« flags to syncoid, which keeps the created sync snapshots selectively on the source/target.
+# (To avoid conflicts with other patches, and since it is quite clear where the hunks are to be applied, this patch uses very little context. Replacing lines and single line anchors after an inserted line seem to work fine, single line anchors before not so much.)
+--- a/syncoid
++++ b/syncoid
+@@ -29,1 +29,2 @@ GetOptions(\%args, "no-command-checks", "monitor-version", "compress=s", "dumpsn
++                   "keep-sync-snap-source", "keep-sync-snap-target",
+                    "mbuffer-size=s" => \$mbuffer_size) or pod2usage(2);
+@@ -861,4 +861,8 @@ sub syncdataset {
+ 		if (!defined $args{'keep-sync-snap'}) {
+ 			# prune obsolete sync snaps on source and target (only if this run created ones).
+-			pruneoldsyncsnaps($sourcehost,$sourcefs,$newsyncsnap,$sourceisroot,keys %{ $snaps{'source'}});
++			if (!defined $args{'keep-sync-snap-source'}) {
++				pruneoldsyncsnaps($sourcehost,$sourcefs,$newsyncsnap,$sourceisroot,keys %{ $snaps{'source'}});
++			}
+-			pruneoldsyncsnaps($targethost,$targetfs,$newsyncsnap,$targetisroot,keys %{ $snaps{'target'}});
++			if (!defined $args{'keep-sync-snap-target'}) {
++				pruneoldsyncsnaps($targethost,$targetfs,$newsyncsnap,$targetisroot,keys %{ $snaps{'target'}});
++			}
+@@ -1974,2 +1976,4 @@ Options:
++  --keep-sync-snap-source  Don't destroy created sync snapshots on the source
++  --keep-sync-snap-target  Don't destroy created sync snapshots on the target
+   --create-bookmark     Creates a zfs bookmark for the newest snapshot on the source after replication succeeds (only works with --no-sync-snap)

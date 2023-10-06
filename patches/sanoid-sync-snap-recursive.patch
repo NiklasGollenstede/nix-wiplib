@@ -1,0 +1,35 @@
+diff --git a/syncoid b/syncoid
+index 3f112de..7d19532 100755
+# Fixes syncoid so that when it is supposed to send recursive snapshots, it also creates and prunes its sync snaps recursively.
+--- a/syncoid
++++ b/syncoid
+@@ -1354,7 +1354,13 @@ sub pruneoldsyncsnaps {
+ 	my $prunecmd;
+ 	foreach my $snap(@prunesnaps) {
+ 		$counter ++;
+-		$prunecmd .= "$mysudocmd $zfscmd destroy $fsescaped\@$snap; ";
++
++		# when supposed to send recursive snapshots, also prune them recursively
++		my $snapopts = ''; foreach my $option(@sendoptions) {
++			if ($option->{option} eq 'R') { $snapopts = '-r'; }
++		}
++
++		$prunecmd .= "$mysudocmd $zfscmd destroy $snapopts $fsescaped\@$snap; ";
+ 		if ($counter > $maxsnapspercmd) {
+ 			$prunecmd =~ s/\; $//;
+ 			if ($debug) { print "DEBUG: pruning up to $maxsnapspercmd obsolete sync snapshots...\n"; }
+@@ -1409,7 +1415,13 @@ sub newsyncsnap {
+ 	my $hostid = hostname();
+ 	my %date = getdate();
+ 	my $snapname = "syncoid\_$identifier$hostid\_$date{'stamp'}";
+-	my $snapcmd = "$rhost $mysudocmd $zfscmd snapshot $fsescaped\@$snapname\n";
++
++	# when supposed to send recursive snapshots, also take them recursively
++	my $snapopts = ''; foreach my $option(@sendoptions) {
++		if ($option->{option} eq 'R') { $snapopts = '-r'; }
++	}
++
++	my $snapcmd = "$rhost $mysudocmd $zfscmd snapshot $snapopts $fsescaped\@$snapname\n";
+ 	if ($debug) { print "DEBUG: creating sync snapshot using \"$snapcmd\"...\n"; }
+ 	system($snapcmd) == 0 or do {
+ 		warn "CRITICAL ERROR: $snapcmd failed: $?";

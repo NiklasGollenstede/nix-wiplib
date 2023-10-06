@@ -97,6 +97,7 @@
 		"raidz", // zfs
 		"raspberrypi", // abbr
 		"raspberrypifw", // package
+		"readlink", // program / function
 		"realpath", // program / function
 		"reexec", // option
 		"refreservation", // zfs
@@ -106,11 +107,14 @@
 		"rpool", // zfs
 		"rprivate", // linux
 		"rtkit", // program
+		"sanoid", // program
 		"sbabic", // name
 		"sgdisk", // program
 		"stdenv", // nix
 		"stty", // program / function
+		"syncoid", // program
 		"syslinux", // package
+		"syspkgs", // abbr (system packages)
 		"sysrq", // linux
 		"temproot", // abbr (temporary root (FS))
 		"timefmt", // option

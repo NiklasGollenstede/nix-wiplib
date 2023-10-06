@@ -1,0 +1,36 @@
+diff --git a/syncoid b/syncoid
+index 3f112de..2d82c4b 100755
+# Makes the »-no-command-checks« "work(s) for me". (Nobody seems to have ever used or tested this. There is a typo in flag name, and at least one further bug (but probably more).)
+--- a/syncoid
++++ b/syncoid
+@@ -949,3 +949,3 @@ sub checkcommands
+-	# if --nocommandchecks then assume everything's available and return
+-	if ($args{'nocommandchecks'}) {
+-		if ($debug) { print "DEBUG: not checking for command availability due to --nocommandchecks switch.\n"; }
++	# if --no-command-checks then assume everything's available and return
++	if ($args{'no-command-checks'}) {
++		if ($debug) { print "DEBUG: not checking for command availability due to --no-command-checks switch.\n"; }
+@@ -1271,1 +1271,1 @@ sub buildsynccmd
+-		if ($avail{'compress'}) { $synccmd .= " $compressargs{'cmd'} |"; }
++		if ($avail{'compress'} && $compressargs{'cmd'} ne ' ') { $synccmd .= " $compressargs{'cmd'} |"; }
+@@ -1271,1 +1271,1 @@ sub buildsynccmd
+-		if ($avail{'compress'}) { $remotecmd .= " $compressargs{'decomcmd'} |"; }
++		if ($avail{'compress'} && $compressargs{'decomcmd'} ne ' ') { $remotecmd .= " $compressargs{'decomcmd'} |"; }
+@@ -1286,1 +1286,1 @@ sub buildsynccmd
+-		if ($avail{'compress'}) { $remotecmd .= " | $compressargs{'cmd'}"; }
++		if ($avail{'compress'} && $compressargs{'cmd'} ne ' ') { $remotecmd .= " | $compressargs{'cmd'}"; }
+@@ -1286,1 +1286,1 @@ sub buildsynccmd
+-		if ($avail{'compress'}) { $synccmd .= "$compressargs{'decomcmd'} | "; }
++		if ($avail{'compress'} && $compressargs{'cmd'} ne ' ') { $synccmd .= "$compressargs{'decomcmd'} | "; }
+@@ -1300,1 +1300,1 @@ sub buildsynccmd
+-		if ($avail{'compress'}) { $remotecmd .= " | $compressargs{'cmd'}"; }
++		if ($avail{'compress'} && $compressargs{'cmd'} ne ' ') { $remotecmd .= " | $compressargs{'cmd'}"; }
+@@ -1300,1 +1300,1 @@ sub buildsynccmd
+-		if ($avail{'compress'}) { $synccmd .= "$compressargs{'decomcmd'} | "; }
++		if ($avail{'compress'} && $compressargs{'cmd'} ne ' ') { $synccmd .= "$compressargs{'decomcmd'} | "; }
+@@ -1300,1 +1300,1 @@ sub buildsynccmd
+-		if ($avail{'compress'}) { $synccmd .= "$compressargs{'cmd'} | "; }
++		if ($avail{'compress'} && $compressargs{'cmd'} ne ' ') { $synccmd .= "$compressargs{'cmd'} | "; }
+@@ -1300,1 +1300,1 @@ sub buildsynccmd
+-		if ($avail{'compress'}) { $remotecmd .= " $compressargs{'decomcmd'} |"; }
++		if ($avail{'compress'} && $compressargs{'cmd'} ne ' ') { $remotecmd .= " $compressargs{'decomcmd'} |"; }

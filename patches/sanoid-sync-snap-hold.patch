@@ -1,0 +1,133 @@
+diff --git a/syncoid b/syncoid
+index 3f112de..abbce76 100755
+# Adds the »--sync-snap-hold/release« flags to syncoid, which set/release holds on the sync snap before/after sending.
+# (Includes the »sanoid-sync-snap-recursive.patch« and »sanoid-keep-sync-snap-target.patch« patches.)
+--- a/syncoid
++++ b/syncoid
+@@ -26,6 +26,8 @@ GetOptions(\%args, "no-command-checks", "monitor-version", "compress=s", "dumpsn
+                    "debug", "quiet", "no-stream", "no-sync-snap", "no-resume", "exclude=s@", "skip-parent", "identifier=s",
+                    "no-clone-handling", "no-privilege-elevation", "force-delete", "no-clone-rollback", "no-rollback",
+                    "create-bookmark", "pv-options=s" => \$pvoptions, "keep-sync-snap", "preserve-recordsize",
++                   "sync-snap-hold=s", "sync-snap-release=s", "sync-snap-prune-release=s",
++                   "keep-sync-snap-source", "keep-sync-snap-target",
+                    "mbuffer-size=s" => \$mbuffer_size) or pod2usage(2);
+
+ my %compressargs = %{compressargset($args{'compress'} || 'default')}; # Can't be done with GetOptions arg, as default still needs to be set
+@@ -393,6 +395,10 @@ sub syncdataset {
+ 	}
+ 	my $newsyncsnapescaped = escapeshellparam($newsyncsnap);
+
++	if (length $args{'sync-snap-hold'}) {
++		loopzfscmdforargs($sourcehost,$sourcefs,$newsyncsnap,$sourceisroot,'hold',$args{'sync-snap-hold'});
++	}
++
+ 	# there is currently (2014-09-01) a bug in ZFS on Linux
+ 	# that causes readonly to always show on if it's EVER
+ 	# been turned on... even when it's off... unless and
+@@ -828,6 +834,10 @@ sub syncdataset {
+ 		}
+ 	}
+
++	if (length $args{'sync-snap-release'}) {
++		loopzfscmdforargs($sourcehost,$sourcefs,$newsyncsnap,$sourceisroot,'release',$args{'sync-snap-release'});
++	}
++
+ 	if (defined $args{'no-sync-snap'}) {
+ 		if (defined $args{'create-bookmark'}) {
+ 			my $bookmarkcmd;
+@@ -860,8 +870,12 @@ sub syncdataset {
+ 	} else {
+ 		if (!defined $args{'keep-sync-snap'}) {
+ 			# prune obsolete sync snaps on source and target (only if this run created ones).
+-			pruneoldsyncsnaps($sourcehost,$sourcefs,$newsyncsnap,$sourceisroot,keys %{ $snaps{'source'}});
+-			pruneoldsyncsnaps($targethost,$targetfs,$newsyncsnap,$targetisroot,keys %{ $snaps{'target'}});
++			if (!defined $args{'keep-sync-snap-source'}) {
++				pruneoldsyncsnaps($sourcehost,$sourcefs,$newsyncsnap,$sourceisroot,keys %{ $snaps{'source'}});
++			}
++			if (!defined $args{'keep-sync-snap-target'}) {
++				pruneoldsyncsnaps($targethost,$targetfs,$newsyncsnap,$targetisroot,keys %{ $snaps{'target'}});
++			}
+ 		}
+ 	}
+
+@@ -1354,7 +1368,19 @@ sub pruneoldsyncsnaps {
+ 	my $prunecmd;
+ 	foreach my $snap(@prunesnaps) {
+ 		$counter ++;
+-		$prunecmd .= "$mysudocmd $zfscmd destroy $fsescaped\@$snap; ";
++
++		# when supposed to send recursive snapshots, also prune them recursively
++		my $snapopts = ''; foreach my $option(@sendoptions) {
++			if ($option->{option} eq 'R') { $snapopts = '-r'; }
++		}
++
++		# remove holds before pruning
++		if (length $args{'sync-snap-prune-release'}) { foreach (split(/,/,$args{'sync-snap-prune-release'})) {
++			$prunecmd .= "$mysudocmd $zfscmd release $snapopts $_ $fsescaped\@$snap; ";
++		} }
++
++		$prunecmd .= "$mysudocmd $zfscmd destroy $snapopts $fsescaped\@$snap; ";
++
+ 		if ($counter > $maxsnapspercmd) {
+ 			$prunecmd =~ s/\; $//;
+ 			if ($debug) { print "DEBUG: pruning up to $maxsnapspercmd obsolete sync snapshots...\n"; }
+@@ -1409,7 +1435,13 @@ sub newsyncsnap {
+ 	my $hostid = hostname();
+ 	my %date = getdate();
+ 	my $snapname = "syncoid\_$identifier$hostid\_$date{'stamp'}";
+-	my $snapcmd = "$rhost $mysudocmd $zfscmd snapshot $fsescaped\@$snapname\n";
++
++	# when supposed to send recursive snapshots, also take them recursively
++	my $snapopts = ''; foreach my $option(@sendoptions) {
++		if ($option->{option} eq 'R') { $snapopts = '-r'; }
++	}
++
++	my $snapcmd = "$rhost $mysudocmd $zfscmd snapshot $snapopts $fsescaped\@$snapname\n";
+ 	if ($debug) { print "DEBUG: creating sync snapshot using \"$snapcmd\"...\n"; }
+ 	system($snapcmd) == 0 or do {
+ 		warn "CRITICAL ERROR: $snapcmd failed: $?";
+@@ -1420,6 +1452,32 @@ sub newsyncsnap {
+ 	return $snapname;
+ }
+
++sub loopzfscmdforargs { # (modified copy of newsyncsnap)
++	my ($rhost,$fs,$snapname,$isroot,$method,$args) = @_;
++	my $fsescaped = escapeshellparam($fs);
++	if ($rhost ne '') {
++		$rhost = "$sshcmd $rhost";
++		# double escaping needed
++		$fsescaped = escapeshellparam($fsescaped);
++	}
++	my $mysudocmd;
++	if ($isroot) { $mysudocmd = ''; } else { $mysudocmd = $sudocmd; }
++
++	my $snapopts = ''; foreach my $option(@sendoptions) {
++		if ($option->{option} eq 'R') { $snapopts = '-r'; }
++	}
++
++	foreach (split(/,/,$args)) {
++		my $arg = $_;
++		my $cmd = "$rhost $mysudocmd $zfscmd hold $snapopts $arg $fsescaped\@$snapname\n";
++		system($cmd) == 0 or do {
++			warn "CRITICAL ERROR: $cmd failed: $?";
++			if ($exitcode < 2) { $exitcode = 2; }
++			return 0;
++		};
++	}
++}
++
+ sub targetexists {
+ 	my ($rhost,$fs,$isroot) = @_;
+ 	my $fsescaped = escapeshellparam($fs);
+@@ -1971,6 +2029,11 @@ Options:
+   --no-stream           Replicates using newest snapshot instead of intermediates
+   --no-sync-snap        Does not create new snapshot, only transfers existing
+   --keep-sync-snap      Don't destroy created sync snapshots
++  --keep-sync-snap-source  Don't destroy created sync snapshots on the source
++  --keep-sync-snap-target  Don't destroy created sync snapshots on the target
++  --sync-snap-hold=TAGS      Before sending, set these comma separated hold tags on the sync snap. These (and all preexisting) holds can be transfered with --sendoptions=h.
++  --sync-snap-release=TAGS   After sending, remove these hold tags from the sync snap (on the source).
++  --sync-snap-prune-release=TAGS    When pruning, remove these hold tags from the sync snap just before destroying them.
+   --create-bookmark     Creates a zfs bookmark for the newest snapshot on the source after replication succeeds (only works with --no-sync-snap)
+   --preserve-recordsize Preserves the recordsize on initial sends to the target
+   --no-clone-rollback   Does not rollback clones on target

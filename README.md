@@ -5,6 +5,15 @@ The idea of this repo / flake is that whenever I have a Nix function, NixOS Modu
 
 Eventually I may decide to move parts of this into their own flake repository, but as long as they live here, APIs are not necessarily stable.
 
+
+## Notables
+
+* [**Append-Only ZFS Backups**](./modules/services/zfs/): Multi-level pushing of incremental snapshots to append-only remotes, for non-`destroy`able, encrypted on- and off-site backups.
+* [**Dropbear SSH Server**](./modules/services/dropbear.nix.md): A simple service definition for using dropbear as (main system) SSH server, as a much lighter (but also less feature-rich) alternative of OpenSSH, especially for embedded systems.
+* [**Hetzner Cloud VPS Config**](./modules/hardware/hetzner-vps.nix.md): "Device" specific configuration and [fully automated deployment](./modules/hardware/hetzner-deploy-vps.sh) for Hetzner's cloud VPS VMs.
+* [**VPS Workers**](./lib/vps-worker.nix.md): (Experimental) definitions for on-demand spawnable workers (for CPU workloads like Nix builds) based on the above.
+
+
 ## Graduates
 
 Former residents of this repository that now live on their own:

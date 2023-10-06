@@ -1,0 +1,57 @@
+diff --git a/syncoid b/syncoid
+index 3f112de..ed256f6 100755
+# Adds the »--sync-snap-cmd-before/after« flags to syncoid, allowing to run a arbitrary command before/after sending, with the sync snap as argument.
+--- a/syncoid
++++ b/syncoid
+@@ -26,1 +26,2 @@
+ GetOptions(\%args, "no-command-checks", "monitor-version", "compress=s", "dumpsnaps", "recursive|r", "sendoptions=s", "recvoptions=s",
++                   "sync-snap-cmd-before=s", "sync-snap-cmd-after=s",
+@@ -393,6 +394,10 @@ sub syncdataset {
+ 	}
+ 	my $newsyncsnapescaped = escapeshellparam($newsyncsnap);
+
++	if (length $args{'sync-snap-cmd-before'}) {
++		runCmdWithSnap($sourcehost,$sourcefs,$newsyncsnap,$sourceisroot,$args{'sync-snap-cmd-before'});
++	}
++
+ 	# there is currently (2014-09-01) a bug in ZFS on Linux
+ 	# that causes readonly to always show on if it's EVER
+ 	# been turned on... even when it's off... unless and
+@@ -828,3 +833,8 @@ sub syncdataset {
++
++	if (length $args{'sync-snap-cmd-after'}) {
++		runCmdWithSnap($sourcehost,$sourcefs,$newsyncsnap,$sourceisroot,$args{'sync-snap-cmd-after'});
++	}
++
+ 	if (defined $args{'no-sync-snap'}) {
+ 		if (defined $args{'create-bookmark'}) {
+ 			my $bookmarkcmd;
+@@ -1420,3 +1429,23 @@ sub newsyncsnap
++sub runCmdWithSnap { # (modified copy of newsyncsnap)
++	my ($rhost,$fs,$snapname,$isroot,$cmd) = @_;
++	my $fsescaped = escapeshellparam($fs);
++	if ($rhost ne '') {
++		$rhost = "$sshcmd $rhost";
++		# double escaping needed
++		$fsescaped = escapeshellparam($fsescaped);
++	}
++	my $mysudocmd;
++	if ($isroot) { $mysudocmd = ''; } else { $mysudocmd = $sudocmd; }
++
++	my $command = "$rhost $mysudocmd $cmd $fsescaped\@$snapname\n";
++	if ($debug) { print "DEBUG: executing command \"$command\"...\n"; }
++	system($command) == 0 or do {
++		warn "CRITICAL ERROR: $command failed: $?";
++		if ($exitcode < 2) { $exitcode = 2; }
++		return 0;
++	};
++}
++
+ sub targetexists {
+ 	my ($rhost,$fs,$isroot) = @_;
+ 	my $fsescaped = escapeshellparam($fs);
+@@ -1971,2 +2000,4 @@ Options:
+   --keep-sync-snap      Don't destroy created sync snapshots
++  --sync-snap-cmd-before=PROG  Program to call on the source host before sending, with the sync snap as first argument.
++  --sync-snap-cmd-after=PROG   Program to call on the source host after sending, with the sync snap as first argument.
+   --create-bookmark     Creates a zfs bookmark for the newest snapshot on the source after replication succeeds (only works with --no-sync-snap)
