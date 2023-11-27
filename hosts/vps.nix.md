@@ -22,7 +22,7 @@ in { preface = {
 
 }; imports = [ ({ ## Hardware
 
-    nixpkgs.hostPlatform = if name == "vps" then "x86_64-linux" else "aarch64-linux"; system.stateVersion = "23.05";
+    nixpkgs.hostPlatform = if name == "vps" then "x86_64-linux" else "aarch64-linux"; system.stateVersion = "23.11";
 
     wip.hardware.hetzner-vps.enable = true;
     setup.temproot.enable = true;

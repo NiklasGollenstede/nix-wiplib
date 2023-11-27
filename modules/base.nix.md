@@ -49,7 +49,7 @@ in {
         ''); # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)
 
         system.activationScripts.diff-systems = { text = ''
-            if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix ]] ; then $systemConfig/sw/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig" ; fi
+            if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix && $(realpath /run/current-system) != "$systemConfig" ]] ; then $systemConfig/sw/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig" ; fi
         ''; deps = [ "etc" ]; }; # (to deactivate this, set »system.activationScripts.diff-systems = lib.mkForce "";«)
 
         virtualisation = lib.fun.mapMerge (vm: { ${vm} = let
@@ -190,16 +190,18 @@ in {
 
             nixos-list-generations = "nix-env --list-generations --profile /nix/var/nix/profiles/system";
 
-            sc  = "systemctl";
-            scs = "systemctl status";
-            scc = "systemctl cat";
-            scu = "systemctl start"; # up
-            scd = "systemctl stop"; # down
-            scr = "systemctl restart";
-            scf = "systemctl list-units --state error --state bad --state bad-setting --state failed --state auto-restart"; # ("auto-restart" is waiting to be restarted (i.e, has RestartSec and and the rate limit was not yet reached). I don't know how to query "previous activation failed" _while_ the unit is activating.)
-            scj = "journalctl -b -f -n 20 -u";
+        } // (lib.fun.mapMerge (s: user: { # sc* + uc*
 
-        };
+            "${s}c"  = "systemctl${user}";
+            "${s}cs" = "systemctl${user} status";
+            "${s}cc" = "systemctl${user} cat";
+            "${s}cu" = "systemctl${user} start"; # up
+            "${s}cd" = "systemctl${user} stop"; # down
+            "${s}cr" = "systemctl${user} restart";
+            "${s}cf" = "systemctl${user} list-units --state error --state bad --state bad-setting --state failed --state auto-restart"; # ("auto-restart" is waiting to be restarted (i.e, has RestartSec and and the rate limit was not yet reached). I don't know how to query "previous activation failed" _while_ the unit is activating.)
+            "${s}cj" = "journalctl${user} -b -f -n 20 -u";
+
+        }) { s = ""; u = " --user"; });
 
         programs.bash.promptInit = ''
             # Provide a nice prompt if the terminal supports it.

@@ -32,7 +32,7 @@ Declaring a smaller image size and expanding it on boot may be a workaround, but
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
 dirname: inputs: args@{ config, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
-    prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer extlinux;
+    prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer;
     cfg = config.${prefix}.hardware.hetzner-vps;
 in {
 
@@ -42,7 +42,7 @@ in {
 
     config = lib.mkIf cfg.enable ({
 
-        boot.loader.${extlinux}.enable = pkgs.system == "x86_64-linux";
+        boot.loader.extlinux.enable = pkgs.system == "x86_64-linux";
         boot.loader.systemd-boot.enable = pkgs.system == "aarch64-linux";
         ${installer}.scripts.hetzner-deploy.path = ./hetzner-deploy-vps.sh;
 

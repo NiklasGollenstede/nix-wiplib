@@ -20,7 +20,7 @@ dirname: inputs: { config, pkgs, lib, name, ... }: let lib = inputs.self.lib.__i
 
 in { imports = [ ({ ## Hardware
 
-    nixpkgs.hostPlatform = "aarch64-linux"; system.stateVersion = "23.05";
+    nixpkgs.hostPlatform = "aarch64-linux"; system.stateVersion = "23.11";
     wip.hardware.raspberry-pi.enable = true;
 
     setup.disks.devices.primary.size = 31914983424; # exact size of the disk/card

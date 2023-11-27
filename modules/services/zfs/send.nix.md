@@ -6,7 +6,9 @@ Implements the sending (or forwarding) of encrypted ZFS datasets for incremental
 The sending host/user does not require destructive ZFS permissions on the target, i.e. it can never cause the destruction on pervious backups.
 See [the README](./README.md) for motivation and concepts.
 
-**NOTICE**: (If any dataset targets are defined, then) this module currently requires the [`nixpkgs-syncoid-user-per-cmd`](../../../patches/nixpkgs-syncoid-user-per-cmd.patch) patch to be applied to `nixpkgs` and `config.services.syncoid.sshKey` to be set.
+**NOTICE**: (If any dataset targets are defined, then) this module currently requires `config.services.syncoid.sshKey` to be set and the [`nixpkgs-syncoid-user-per-cmd`](../../../patches/nixpkgs/syncoid-user-per-cmd.patch) patch to be applied to `nixpkgs`.
+See at the bottom of [`hosts/zfs-backup.nix.md`](../../../hosts/zfs-backup.nix.md) for an example how to do this (without patching all of `nixpkgs`).
+
 
 ## Implementation
 
@@ -78,7 +80,6 @@ in { imports = [ {
         services.syncoid.user = "backup"; services.syncoid.group = "backup";
         users.users.backup = { isSystemUser = true; group = "backup"; }; users.groups.backup = { }; # the group should be able to read the »config.services.syncoid.sshKey«
 
-        services.syncoid.commonArgs = commonArgs;
         services.syncoid.localSourceAllow = [ "userprop" ] ++ [ "bookmark" "hold" "send" "snapshot" "destroy" ] ++ [ "mount" ]; # for reasons of obviousness, destroying (not-mounted) snapshots requires the »mount« permission (might be because they are accessible via the ».zfs« hidden directory)
         # TODO: drop userprop?
         # TODO: Only need destroy/mount when not forwarding?
@@ -99,7 +100,7 @@ in { imports = [ {
 
         services.syncoid.commands = forEachTarget (source: target: { ${commandName source target} = {
             source = source.path; target = "${target.user}@${targetSpec source target}";
-            extraArgs = [ "--identifier=to_${target.name}_from" ]
+            extraArgs = commonArgs ++ [ "--identifier=to_${target.name}_from" ]
             # When forwarding, don't create sync snaps, but instead remove the target from the pending list (see »Backup Forwarding« in the README):
             ++ (lib.optionals source.isForwarding [ "--no-sync-snap" "--sync-snap-cmd-after=${pkgs.bash}/bin/bash ${./utils/mark-snap-as-sent.sh} ${target.name} ${cfg.forwardPendingProperty}" ]);
             # BUG?: It seems that receiving a stream with holds triggers a number of different assertions in zfs, so don't use holds. (Edit: It might work if the »hold« permission was set on the receiving side ...)

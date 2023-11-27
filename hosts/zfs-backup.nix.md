@@ -33,7 +33,7 @@ in { preface = {
 
 }; imports = [ ({ ## Hardware
 
-    nixpkgs.hostPlatform = "x86_64-linux"; system.stateVersion = "23.05";
+    nixpkgs.hostPlatform = "x86_64-linux"; system.stateVersion = "23.11";
 
     boot.loader.extlinux.enable = true;
     profiles.qemu-guest.enable = true;
@@ -85,7 +85,7 @@ in { preface = {
     # If this host also serves other tasks, snapshot its local data as well:
     services.sanoid.enable = true; services.sanoid.interval = "*:0/15";
     services.sanoid.datasets."${rpool}/remote" = {
-        use_template = [ "production" ]; recursive = "zfs";
+        recursive = "zfs"; use_template = [ "production" ]; # (see below)
     };
 
     # Then send all received backups and own data to the off-site sinks:
@@ -121,7 +121,7 @@ in { preface = {
     services.openssh.knownHosts = lib.fun.mapMerge (name: { ${name}.publicKeyFile = ../example/ssh-dummy-key.pub; }) instances;
     environment.etc."ssh/ssh_host_ed25519_key" = { source = lib.mkForce ../example/ssh-dummy-key; mode = "0400"; };
 
-    services.sanoid.templates.production = { # »production«
+    services.sanoid.templates.production = {
         autoprune  = true; autosnap   = true;
         frequent_period = 15; # make "frequently" = 15 minutes
 
