@@ -139,7 +139,7 @@ in { preface = {
     disabledModules = [ "services/backup/syncoid.nix" ];
     imports = [ "${((import inputs.nixpkgs { system = "x86_64-linux"; }).applyPatches {
         name = "nixpkgs-patched"; src = "";
-        patches = [ ../patches/nixpkgs-syncoid-user-per-cmd.patch ];
+        patches = [ ../patches/nixpkgs/syncoid-user-per-cmd.patch ];
     }).overrideAttrs {
         unpackPhase = ''
             mkdir -p nixos/modules/services/backup

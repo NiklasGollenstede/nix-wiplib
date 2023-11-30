@@ -17,14 +17,8 @@
 in [ # Run »nix flake show --allow-import-from-derivation« to see what this merges to:
     repo # lib.* nixosModules.* overlays.*
 
-    (lib.inst.mkSystemsFlake { inherit inputs; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems
-    { packages = lib.fun.packagesFromOverlay { inherit inputs; }; } # packages.*.*
-    { patches = (lib.fun.importWrapped inputs "${self}/patches").result; } # patches.*
+    (lib.inst.mkSystemsFlake { inherit inputs; asDefaultPackage = true; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems
     { templates.default = { path = "${self}/example/template"; description = "NixOS host(s) configuration"; }; }
-
-    (lib.fun.forEachSystem (import inputs.systems) (localSystem: {
-        packages.default = self.packages.${localSystem}.all-systems;
-    }))
 
     (lib.fun.forEachSystem (import inputs.systems) (localSystem: let
         pkgs = lib.fun.importPkgs inputs { system = localSystem; };
