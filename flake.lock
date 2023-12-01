@@ -2,14 +2,19 @@
   "nodes": {
     "config": {
       "locked": {
-        "lastModified": 1,
-        "narHash": "sha256-EgEBMr5JbCUXVFMInh5Wn11jlMPlRyd1IpDPO8pLzYI=",
-        "path": "./example/defaultConfig",
-        "type": "path"
+        "dir": "example/defaultConfig",
+        "lastModified": 1701348304,
+        "narHash": "sha256-+TSKcooel7ANOJgn4H4qEVHA0DI5JcfRZHkwfYi41A8=",
+        "owner": "NiklasGollenstede",
+        "repo": "nix-wiplib",
+        "rev": "0f558c7aa5b24e7ba19120951e93586fbf303be2",
+        "type": "github"
       },
       "original": {
-        "path": "./example/defaultConfig",
-        "type": "path"
+        "dir": "example/defaultConfig",
+        "owner": "NiklasGollenstede",
+        "repo": "nix-wiplib",
+        "type": "github"
       }
     },
     "config_2": {
