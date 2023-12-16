@@ -2,9 +2,11 @@
 	"cSpell.diagnosticLevel": "Information", // to find spelling mistakes
 	"cSpell.words": [
 		"aarch64", // processor architecture
+		"argstr", // nix
 		"attrset", "attrsets", // nix/abbr (attribute set)
 		"autoexpand", // zfs option
 		"autologin", // agetty
+		"bindir", // abbr
 		"binfmt", // abbr "binary format"
 		"blkdiscard", // program
 		"blockdev", // program / function
@@ -19,6 +21,7 @@
 		"coreutils", // package
 		"CWD", // abbr
 		"cykerway", // name
+		"datadir", // abbr
 		"dontUnpack", // nixos
 		"dropbear", // program
 		"dtoverlay", // option
@@ -52,6 +55,7 @@
 		"hugepages", // linux
 		"ignoredups", // bash option
 		"ignorespace", // bash option
+		"initdb", // abbr
 		"inodes", // plural
 		"ints", // plural
 		"journalctl", // program
@@ -60,6 +64,7 @@
 		"libblockdev", // package
 		"libraspberrypi", // program
 		"libubootenv", // package
+		"libyaml", // package
 		"logind", // program
 		"luks", // linux
 		"mkdir", // program / function
@@ -93,6 +98,7 @@
 		"posix", // word
 		"poweroff", // program / function
 		"poweron", // concat
+		"psqlSchema", // abbr
 		"pwauth", // abbr (password authentication)
 		"raidz", // zfs
 		"raspberrypi", // abbr
@@ -118,6 +124,7 @@
 		"sysrq", // linux
 		"temproot", // abbr (temporary root (FS))
 		"timefmt", // option
+		"tmpdir", // program
 		"tmpfiles", // nixos option
 		"tmpfs", // linux
 		"toplevel", // nix
@@ -127,6 +134,7 @@
 		"udev", // program
 		"udptunnel", // program
 		"UEFI", // abbr
+		"unbootable", // word
 		"unalias", // bash
 		"urandom", // linux
 		"usbhid", // kmod

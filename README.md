@@ -25,7 +25,7 @@ Former residents of this repository that now live on their own:
 
 This is a nix flake repository, so [`flake.nix`](./flake.nix) is the entry point and export mechanism for almost everything.
 
-[`lib/`](./lib/) defines new library functions which are exported as the `lib` flake output. Other Nix files in this repo use them as `inputs.self.lib`.
+[`lib/`](./lib/) defines new library functions which are exported as the `lib` flake output. Other Nix files in this repo use them as `(lib = inputs.self.lib.__internal__).wip`.
 
 [`modules/`](./modules/) contains NixOS configuration modules. Added options' names start with `wip.` (or a custom prefix, see [Namespacing](#namespacing-in-nixos)).
 The modules are inactive by default, and are, where possible, designed to be independent from each other and the other things in this repo. Some though do have dependencies on added or modified packages, or other modules in the same directory.

@@ -13,18 +13,34 @@ dirname: inputs: moduleArgs@{ config, options, pkgs, lib, ... }: let lib = input
     prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer;
     cfg = config.${prefix}.base;
     outputName = config.${installer}.outputName;
+    toFlakeRef = input: { inherit (input) lastModified narHash; } // (let
+        match = builtins.match ''(${builtins.storeDir}/.*)/(.*)'' input.outPath;
+    in if match != null then {
+        type = "git"; url = "file://${builtins.elemAt match 0}"; dir = builtins.elemAt match 1;
+    } else {
+        type = "path"; path = input.outPath;
+    });
+    byDefault = { default = true; example = false; };
+    ifKnowsSelf = { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${config.${prefix}.installer.outputName}"; example = false; };
 in {
 
     options.${prefix} = { base = {
         enable = lib.mkEnableOption "saner defaults";
-        includeInputs = lib.mkOption { description = "The system's build inputs, to be included in the flake registry, and on the »NIX_PATH« entry, such that they are available for self-rebuilds and e.g. as »pkgs« on the CLI."; type = lib.types.attrsOf lib.types.anything; apply = lib.filterAttrs (k: v: v != null); default = (moduleArgs.inputs or config._module.args.inputs) // (if config.boot.isContainer then {
-            self = null; # avoid changing (and thus restarting) the containers on every trivial change
-        } else { }); };
-        selfInputName = lib.mkOption { type = lib.types.nullOr lib.types.str; default = "nixos-config"; };
-        panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // { default = true; example = false; }; # It's stupidly hard to remove items from lists ...
-        autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${config.${prefix}.installer.outputName}"; example = false; };
-        preserveBootedGeneration = lib.mkEnableOption "a boot loader entry that always points at the system last booted when the bootloader was applied" // { default = true; example = false; };
-        bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // { default = true; example = false; };
+        includeInputs = lib.mkOption { description = "The system's build inputs, to be included in the flake registry, and on the »NIX_PATH« entry, such that they are available for self-rebuilds and e.g. as »pkgs« on the CLI."; type = lib.types.attrsOf lib.types.anything; apply = lib.filterAttrs (k: v: v != null); default = let
+            inputs = moduleArgs.inputs or config._module.args.inputs;
+        in ((
+            if config.boot.isContainer then builtins.removeAttrs inputs [ "self" ] else inputs # avoid changing (and thus restarting) the containers on every trivial change
+        ) // (
+            if inputs?self.outputs.outPath then { self = inputs.self // { outPath = inputs.self.outputs.outPath; }; } else { } # see inputs.functions.lib.imports.importRepo
+        )); };
+        selfInputName = lib.mkOption { description = "name of »config.${prefix}.base.includeInputs.self« flake"; type = lib.types.nullOr lib.types.str; default = "nixos-config"; };
+        panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // byDefault; # It's stupidly hard to remove items from lists ...
+        showDiffOnActivation = lib.mkEnableOption "showing a diff compared to the previous system on activation of this new system (generation)" // byDefault;
+        autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // ifKnowsSelf;
+        bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // byDefault;
+
+        accurateImpurePkgs = lib.mkEnableOption "setting the »<nixpkgs>« reference to use the system's overlays and nixpkgs config, for impure Nix commands" // ifKnowsSelf;
+        syspkgs.enable = lib.mkEnableOption "setting the »<nixpkgs>« reference to use the system's overlays and nixpkgs config, for impure Nix commands" // ifKnowsSelf;
     }; };
 
     imports = lib.optional ((builtins.substring 0 5 inputs.nixpkgs.lib.version) <= "22.05") (lib.fun.overrideNixpkgsModule "misc/extra-arguments.nix" { } (old: { config._module.args.utils = old._module.args.utils // {
@@ -41,16 +57,19 @@ in {
         documentation.man.enable = lib.mkDefault config.documentation.enable;
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
+        boot.kernelParams = [ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail"); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails.
+        # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
+        systemd.extraConfig = "StatusUnitFormat=name"; # Show unit names instead of descriptions during boot.
         services.getty.helpLine = lib.mkForce "";
         systemd.services.rtkit-daemon = lib.mkIf (config.security.rtkit.enable) { serviceConfig.LogLevelMax = lib.mkDefault "warning"; }; # spams, and probably irrelevant
 
-        system.extraSystemBuilderCmds = (if !config.boot.initrd.enable then "" else ''
+        system.extraSystemBuilderCmds = lib.mkIf config.boot.initrd.enable ''
             ln -sT ${builtins.unsafeDiscardStringContext config.system.build.bootStage1} $out/boot-stage-1.sh # (this is super annoying to locate otherwise)
-        ''); # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)
+        ''; # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)
 
-        system.activationScripts.diff-systems = { text = ''
+        system.activationScripts.diff-systems = lib.mkIf cfg.showDiffOnActivation { text = ''
             if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix && $(realpath /run/current-system) != "$systemConfig" ]] ; then $systemConfig/sw/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig" ; fi
-        ''; deps = [ "etc" ]; }; # (to deactivate this, set »system.activationScripts.diff-systems = lib.mkForce "";«)
+        ''; deps = [ "etc" ]; };
 
         virtualisation = lib.fun.mapMerge (vm: { ${vm} = let
             config' = config.virtualisation.${vm};
@@ -63,15 +82,50 @@ in {
 
         }; }) [ "vmVariant" "vmVariantWithBootLoader" "vmVariantExec" ];
 
-    }) ({
-        # Robustness/debugging:
 
-        boot.kernelParams = [ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail"); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails.
-        # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
-        systemd.extraConfig = "StatusUnitFormat=name"; # Show unit names instead of descriptions during boot.
+    }) (lib.mkIf (cfg.includeInputs != { }) { # flake things
+
+        # "input" to the system build is definitely also a nix version that works with flakes:
+        nix.settings.experimental-features = [ "nix-command" "flakes" ]; # apparently, even nix 2.8 (in nixos-22.05) needs this
+        environment.systemPackages = [ pkgs.git ]; # necessary as external dependency when working with flakes
+
+        # »inputs.self« does not have a name (that is known here), so just register it as »/etc/nixos/« system config:
+        environment.etc.nixos = lib.mkIf (cfg.includeInputs?self) (lib.mkDefault { source = "/run/current-system/config"; }); # (use this indirection to prevent every change in the config to necessarily also change »/etc«)
+        system.extraSystemBuilderCmds = lib.mkIf (cfg.includeInputs?self) ''
+            ln -sT ${cfg.includeInputs.self} $out/config # (build input for reference)
+        '';
+
+        # Add all (direct) inputs to the flake registry:
+        nix.registry = lib.mapAttrs (name: input: lib.mkDefault { to = toFlakeRef input; }) (
+            (lib.optionalAttrs (cfg.includeInputs?self) { ${cfg.selfInputName} = cfg.includeInputs.self; })
+            // (builtins.removeAttrs cfg.includeInputs [ "self" ])
+        );
+        system.extraDependencies = let getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues (flake.inputs or { }))); in lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)); # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
 
 
-    }) (lib.mkIf (outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}) { # non-flake
+    }) (lib.mkIf (cfg.syspkgs.enable) {
+
+        nix.registry = let
+            nixos-config = if cfg.selfInputName != null then cfg.selfInputName else "nixos-config";
+        in { syspkgs.flake = pkgs.runCommandLocal "syspkgs" {
+            flake_nix = ''{ outputs = { ${nixos-config}, ... }: {
+                legacyPackages.${pkgs.system} = ${nixos-config}.nixosConfigurations.${outputName}.pkgs;
+            }; }'';
+            flake_lock = let lock = lib.importJSON "${cfg.includeInputs.self}/flake.lock" ; in builtins.toJSON {
+                inherit (lock) version; root = "root"; nodes = (lib.mapAttrs (k: dep: dep // (lib.optionalAttrs (dep?inputs) {
+                inputs = lib.mapAttrs (k: ref: if lib.isString ref then ref else [ nixos-config ] ++ ref) dep.inputs;
+            })) lock.nodes) // { ${nixos-config} = {
+                inputs = lock.nodes.root.inputs; original = { id = nixos-config; type = "indirect"; };
+                locked = toFlakeRef cfg.includeInputs.self;
+            }; root.inputs = { ${nixos-config} = nixos-config; }; }; };
+        } ''
+            mkdir $out
+            <<<"$flake_nix" cat > $out/flake.nix
+            <<<"$flake_lock" cat > $out/flake.lock
+        ''; };
+
+
+    }) (lib.mkIf (cfg.accurateImpurePkgs) {
 
         # Importing »<nixpkgs>« as non-flake returns a lambda returning the evaluated Nix Package Collection (»pkgs«). The most accurate representation of what that should be on the target host is the »pkgs« constructed when building it:
         system.extraSystemBuilderCmds = ''
@@ -91,40 +145,6 @@ in {
 
         nix.nixPath = [ "nixpkgs=/run/current-system/pkgs" ]; # this intentionally replaces the defaults: nixpkgs is here, /etc/nixos/flake.nix is implicit, channels are impure
 
-    }) (lib.mkIf (cfg.includeInputs != { }) { # flake things
-
-        # "input" to the system build is definitely also a nix version that works with flakes:
-        nix.settings.experimental-features = [ "nix-command" "flakes" ]; # apparently, even nix 2.8 (in nixos-22.05) needs this
-        environment.systemPackages = [ pkgs.git ]; # necessary as external dependency when working with flakes
-
-        # »inputs.self« does not have a name (that is known here), so just register it as »/etc/nixos/« system config:
-        environment.etc.nixos = lib.mkIf (cfg.includeInputs?self) (lib.mkDefault { source = "/run/current-system/config"; }); # (use this indirection to prevent every change in the config to necessarily also change »/etc«)
-        system.extraSystemBuilderCmds = lib.mkIf (cfg.includeInputs?self) ''
-            ln -sT ${cfg.includeInputs.self} $out/config # (build input for reference)
-        '';
-
-        # Add all inputs to the flake registry:
-        nix.registry = lib.mapAttrs (name: input: lib.mkDefault { flake = input; }) (
-            (lib.optionalAttrs (cfg.includeInputs?self) { ${cfg.selfInputName} = cfg.includeInputs.self; })
-            // (builtins.removeAttrs cfg.includeInputs [ "self" ])
-        ) // (lib.optionalAttrs (cfg.selfInputName != null && outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}) { syspkgs.flake = pkgs.runCommandLocal "syspkgs" {
-            flake_nix = ''{ outputs = { ${cfg.selfInputName}, ... }: {
-                legacyPackages.${pkgs.system} = nixos-config.nixosConfigurations.${outputName}.pkgs;
-            }; }'';
-            flake_lock = let lock = lib.importJSON "${cfg.includeInputs.self}/flake.lock" ; in builtins.toJSON {
-                inherit (lock) version; root = "root"; nodes = (lib.mapAttrs (k: dep: dep // (lib.optionalAttrs (dep?inputs) {
-                inputs = lib.mapAttrs (k: ref: if lib.isString ref then ref else [ cfg.selfInputName ] ++ ref) dep.inputs;
-            })) lock.nodes) // { ${cfg.selfInputName} = {
-                inputs = lock.nodes.root.inputs; original = { id = "nixos-config"; type = "indirect"; };
-                locked = { inherit (cfg.includeInputs.self) lastModified narHash; type = "path"; path = cfg.includeInputs.self.outPath; };
-            }; root.inputs = { ${cfg.selfInputName} = cfg.selfInputName; }; }; };
-        } ''
-            mkdir $out
-            <<<"$flake_nix" cat > $out/flake.nix
-            <<<"$flake_lock" cat > $out/flake.lock
-        ''; });
-        system.extraDependencies = let getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues (flake.inputs or { }))); in lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)); # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
-
 
     }) (lib.mkIf (cfg.autoUpgrade) {
 
@@ -134,111 +154,39 @@ in {
             dates = lib.mkDefault "Sun *-*-* 03:15:00";
         };
         nix.settings = { keep-outputs = true; keep-derivations = true; }; # don't GC build-time dependencies
-        systemd.services.nix-gc.script = lib.mkIf cfg.preserveBootedGeneration (lib.mkForce ''
-            set -x
-            # The booted generation is the only one _known_ to actually boot.
-            # Therefore, save the booted-generation link:
-            tmp=$( mktemp --dry-run ) && trap 'rm -rf $tmp' EXIT
-            bootedSystem=$( readlink /run/booted-system ) || true
-            bootedGen= ; if [[ $bootedSystem ]] ; then for gen in /nix/var/nix/profiles/system-*-link ; do
-                if [[ $( readlink "$gen" ) == "$bootedSystem" ]] ; then bootedGen=$gen ; break ; fi
-            done ; fi
-            if [[ $bootedGen ]] ; then
-                cp -aT "$bootedGen" "$tmp"
-            fi
-
-            # (do the normal GC stuff:)
-            ${config.nix.package.out}/bin/nix-collect-garbage ${config.nix.gc.options}
-
-            # Ad _if_ the booted generation was deleted, restore it (the store path was preserved by the /run/booted-system gc-root):
-            if [[ $bootedGen && ! -e $bootedGen ]] ; then
-                cp -aT "$tmp" "$bootedGen"
-            fi
-        '');
-        # To fix the previous mess:
-        #$ ( cd /nix/var/nix/profiles ; for gen in system-214748*-link ; do num=$( <<<$gen grep -Poe '\d+' ) ; mv $gen system-$(( num + 172 - 2147483648 ))-link ; done )
-        #$ ln -sfT $( cd /nix/var/nix/profiles ; echo system-*-link | grep -Poe '[^ ]+$' ) /nix/var/nix/profiles/system
-        #$ cp -aT /run/booted-system /nix/var/nix/profiles/system-172-link # if it was evicted
 
         system.autoUpgrade = {
-            enable = lib.mkDefault true;
-            flake = "${config.environment.etc.nixos.source}#${outputName}";
+            enable = lib.mkDefault true; channel = null;
+            flake = "$flakePath#${config.${installer}.outputName}";
             flags = map (dep: if dep == "self" then "" else "--update-input ${dep}") (builtins.attrNames cfg.includeInputs); # there is no "--update-inputs"
             # (Since all inputs to the system flake are linked as system-level flake registry entries, even "indirect" references that don't really exist on the target can be "updated" (which keeps the same hash but changes the path to point directly to the nix store).)
-            dates = "05:40"; randomizedDelaySec = "30min";
+            dates = lib.mkDefault "05:40"; randomizedDelaySec = lib.mkDefault "30min";
             allowReboot = lib.mkDefault false;
         };
 
+        systemd.services.nixos-upgrade.script = lib.mkBefore ''
+            # Make flakePath writable and a repo if necessary:
+            flakePath=${lib.escapeShellArg config.environment.etc.nixos.source}
+            if [[ -e $flakePath/flake.lock && ! -w $( realpath "$flakePath" )/flake.lock ]] ; then
+                flakePath=$( realpath "$flakePath" )
+                dir= ; if [[ $flakePath == /nix/store/*/* ]] ; then
+                    dir=''${flakePath#/nix/store/*/}
+                fi
+                tmpdir=$( mktemp -d --tmpdir -- ${lib.escapeShellArg cfg.selfInputName}.XXXXXXXXXX ) && trap "rm -rf $tmpdir" EXIT &&
+                cp -dr -T "$( realpath "''${flakePath%$dir}" )" "$tmpdir" ; chmod +w "$tmpdir"/"$dir"/flake.lock
+                if [[ $dir ]] ; then
+                    ( cd "$tmpdir" ; git init --quiet ; git add --all )
+                    flakePath=git+file://$tmpdir?dir=$dir
+                else
+                    flakePath=path://$tmpdir
+                fi
+            fi
+        '';
 
-    }) (lib.mkIf (cfg.bashInit) {
+    }) ({
+
         # (almost) Free Convenience:
-
-        environment.shellAliases = {
-
-            "with" = "source ${../overlays/scripts/with.sh} ; unalias with ; complete -D with ; with"; # »with« doesn't seem to be a common unix command yet, and it makes sense here: with package(s) => do stuff
-
-            ls = "ls --color=auto"; # (default)
-            l  = "ls -alhF"; # (added F)
-            ll = "ls -alF"; # (added aF)
-            lt = "tree -a -p -g -u -s -D -F --timefmt '%Y-%m-%d %H:%M:%S'"; # ll like tree
-            lp = pkgs.writeShellScript "lp" ''abs="$(cd "$(dirname "$1")" ; pwd)"/"$(basename "$1")" ; ${pkgs.util-linux}/bin/namei -lx "$abs"''; # similar to »ll -d« on all path element from »$1« to »/«
-
-            ips = "ip -c -br addr"; # colorized listing of all interface's IPs
-            mounts = pkgs.writeShellScript "mounts" ''${pkgs.util-linux}/bin/mount | if [[ ''${1:-} ]] ; then ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/' | ${pkgs.gnugrep}/bin/grep -Pe ' on '"$1" ; else ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/| on /var/lib/docker/|^/var/lib/snapd/snaps/' ; fi | LC_ALL=C ${pkgs.coreutils}/bin/sort -k3 | ${pkgs.util-linux}/bin/column -t -N Device/Source,on,Mountpoint,type,Type,Options -H on,type -W Device/Source,Mountpoint,Options''; # the output of »mount«, cleaned up and formatted as a sorted table # (...grep ' on /'"''${1#/}")
-
-            netns-exec = pkgs.writeShellScript "netns-exec" ''ns=$1 ; shift ; /run/wrappers/bin/firejail --noprofile --quiet --netns="$ns" -- "$@"''; # execute a command in a different netns (like »ip netns exec«), without requiring root permissions (but does require »config.programs.firejail.enable=true«)
-
-            nixos-list-generations = "nix-env --list-generations --profile /nix/var/nix/profiles/system";
-
-        } // (lib.fun.mapMerge (s: user: { # sc* + uc*
-
-            "${s}c"  = "systemctl${user}";
-            "${s}cs" = "systemctl${user} status";
-            "${s}cc" = "systemctl${user} cat";
-            "${s}cu" = "systemctl${user} start"; # up
-            "${s}cd" = "systemctl${user} stop"; # down
-            "${s}cr" = "systemctl${user} restart";
-            "${s}cf" = "systemctl${user} list-units --state error --state bad --state bad-setting --state failed --state auto-restart"; # ("auto-restart" is waiting to be restarted (i.e, has RestartSec and and the rate limit was not yet reached). I don't know how to query "previous activation failed" _while_ the unit is activating.)
-            "${s}cj" = "journalctl${user} -b -f -n 20 -u";
-
-        }) { s = ""; u = " --user"; });
-
-        programs.bash.promptInit = ''
-            # Provide a nice prompt if the terminal supports it.
-            if [ "''${TERM:-}" != "dumb" ] ; then
-                if [[ "$UID" == '0' ]] ; then if [[ ! "''${SUDO_USER:-}" ]] ; then # direct root: red username + green hostname
-                    PS1='\[\e[0m\]\[\e[48;5;234m\]\[\e[96m\]$(printf "%-+ 4d" $?)\[\e[93m\][\D{%Y-%m-%d %H:%M:%S}] \[\e[91m\]\u\[\e[97m\]@\[\e[92m\]\h\[\e[97m\]:\[\e[96m\]\w'"''${TERM_RECURSION_DEPTH:+\[\e[91m\]["$TERM_RECURSION_DEPTH"]}"'\[\e[24;97m\]\$ \[\e[0m\]'
-                else # sudo root: red username + red hostname
-                    PS1='\[\e[0m\]\[\e[48;5;234m\]\[\e[96m\]$(printf "%-+ 4d" $?)\[\e[93m\][\D{%Y-%m-%d %H:%M:%S}] \[\e[91m\]\u\[\e[97m\]@\[\e[91m\]\h\[\e[97m\]:\[\e[96m\]\w'"''${TERM_RECURSION_DEPTH:+\[\e[91m\]["$TERM_RECURSION_DEPTH"]}"'\[\e[24;97m\]\$ \[\e[0m\]'
-                fi ; else # other user: green username + green hostname
-                    PS1='\[\e[0m\]\[\e[48;5;234m\]\[\e[96m\]$(printf "%-+ 4d" $?)\[\e[93m\][\D{%Y-%m-%d %H:%M:%S}] \[\e[92m\]\u\[\e[97m\]@\[\e[92m\]\h\[\e[97m\]:\[\e[96m\]\w'"''${TERM_RECURSION_DEPTH:+\[\e[91m\]["$TERM_RECURSION_DEPTH"]}"'\[\e[24;97m\]\$ \[\e[0m\]'
-                fi
-                if test "$TERM" = "xterm" ; then
-                    PS1="\[\033]2;\h:\u:\w\007\]$PS1"
-                fi
-            fi
-            export TERM_RECURSION_DEPTH=$(( 1 + ''${TERM_RECURSION_DEPTH:-0} ))
-        ''; # The non-interactive version of bash does not remove »\[« and »\]« from PS1, but without those the terminal gets confused about the cursor position after the prompt once one types more than a bit of text there (at least via serial or SSH).
-
-        environment.interactiveShellInit = lib.mkBefore ''
-            # In RePl mode: remove duplicates from history; don't save commands with a leading space.
-            HISTCONTROL=ignoredups:ignorespace
-
-            # For shells bound to serial interfaces (which can't detect the size of the screen on the other end), default to a more reasonable screen size than 24x80 blocks/chars:
-            if [[ "$(realpath /dev/stdin)" != /dev/tty[1-8] && $LINES == 24 && $COLUMNS == 80 ]] ; then
-                stty rows 34 cols 145 # Fairly large font on 1080p. (Setting this too large for the screen warps the output really badly.)
-            fi
-        '';
-    }) (lib.mkIf (cfg.bashInit) { # other »interactiveShellInit« (and »shellAliases«) would go in here, being able to overwrite stuff from above, but still also being included in the alias completion below
-        environment.interactiveShellInit = lib.mkAfter ''
-            # enable completion for aliases
-            source ${ pkgs.fetchFromGitHub {
-                owner = "cykerway"; repo = "complete-alias";
-                rev = "4fcd018faa9413e60ee4ec9f48ebeac933c8c372"; # v1.18 (2021-07-17)
-                sha256 = "sha256-fZisrhdu049rCQ5Q90sFWFo8GS/PRgS29B1eG8dqlaI=";
-            } }/complete_alias
-            complete -F _complete_alias "''${!BASH_ALIASES[@]}"
-        '';
+        ${prefix}.profiles.bash.enable = lib.mkIf (cfg.bashInit) true;
 
     }) ]);
 
