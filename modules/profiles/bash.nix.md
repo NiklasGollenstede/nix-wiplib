@@ -52,13 +52,13 @@ in {
         }) { s = ""; u = " --user"; });
 
         programs.bash.promptInit = let
-            green = "91"; red = "92";
+            red = "91"; green = "92";
             PS1 = user: host: ''\[\e[0m\]\[\e[48;5;234m\]\[\e[96m\]$(printf "%-+ 4d" $?)\[\e[93m\][\D{%Y-%m-%d %H:%M:%S}] \[\e[${user}m\]\u\[\e[97m\]@\[\e[${host}m\]\h\[\e[97m\]:\[\e[96m\]\w'"''${TERM_RECURSION_DEPTH:+\[\e[91m\]["$TERM_RECURSION_DEPTH"]}"'\[\e[24;97m\]\$ \[\e[0m\]'';
         in ''
             # Provide a nice prompt if the terminal supports it.
             if [ "''${TERM:-}" != "dumb" ] ; then
                 if [[ "$UID" == '0' ]] ; then if [[ ! "''${SUDO_USER:-}" ]] ; then # direct root: red username + green hostname
-                    PS1='${PS1 green red}'
+                    PS1='${PS1 red green}'
                 else # sudo root: red username + red hostname
                     PS1='${PS1 red red}'
                 fi ; else # other user: green username + green hostname

@@ -100,8 +100,11 @@ in {
             (lib.optionalAttrs (cfg.includeInputs?self) { ${cfg.selfInputName} = cfg.includeInputs.self; })
             // (builtins.removeAttrs cfg.includeInputs [ "self" ])
         );
-        system.extraDependencies = let getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues (flake.inputs or { }))); in lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)); # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
-
+        system.extraDependencies = let # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
+            getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues (flake.inputs or { })));
+        in map (input: {
+            type = "derivation"; outPath = toString input; # required when using newer versions of Nix (~1.14+) with older versions of nixpkgs (pre 23.05?)
+        }) (lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)));
 
     }) (lib.mkIf (cfg.syspkgs.enable) {
 
