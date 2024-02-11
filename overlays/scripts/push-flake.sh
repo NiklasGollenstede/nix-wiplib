@@ -8,7 +8,7 @@ declare -g -A allowedArgs=(
 )
 details="
 »target« can be a plain (SSH) hostname/IP or any valid Nix store URL.
-»flake« should be a local filesystem path. I can also be a »git+file://«-URL, but in that case »dir« is the only supported parameter.
+»flake« should be a local filesystem path. It can also be a »git+file://«-URL, but in that case »dir« is the only supported parameter. Defaults to ».«.
 "
 
 generic-arg-parse "$@" || exit

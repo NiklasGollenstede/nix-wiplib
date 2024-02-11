@@ -8,13 +8,13 @@ The pool is expected to be imported at prefix »$mnt«; »syncoidOptions« (like
 EOD
 
 declare-flag install-system zfs-restore "" "Restore the system's ZFS backups during the installation."
-declare-flag install-system,restore-zfs-backups zfs-restore-host "hostname" "The name of the host from which to load the backups. Must be one of »config.my.services.zfs.send.locations.*« or the name of the host to restore (to clone the living system, instead of restoring a backup). Defaults to the first host for each »config.my.services.zfs.send.locations.*«."
+declare-flag install-system,restore-zfs-backups zfs-restore-host "hostname" "The name of the host from which to load the backups. Must be one of »config.wip.services.zfs.send.datasets.*.locations.*« or the name of the host to restore (to clone the living system, instead of restoring a backup). Defaults to the first host for each »config.wip.services.zfs.send.datasets.*.locations.*«."
 declare-flag install-system,restore-zfs-backups zfs-restore-user "username" "The SSH user name to use to log in at the restore host. Defaults to »root«."
 declare-flag install-system,restore-zfs-backups zfs-restore-local "" "Instead of loading the backups via SSH, assume that the explicit »--zfs-restore-host« points to the host running this script as »root«, and load the backups directly."
 
 function restore-zfs-backups {
     local syncoidOptions=$1
-    local dataset ; for dataset in "@{!config.my.services.zfs.send.locations[@]}" ; do
+    local dataset ; for dataset in "@{!config.wip.services.zfs.send.datasets!catAttrSets.locations[@]}" ; do
 
         local parent=$( dirname "$dataset" ) ; if [[ $parent == . ]] ; then echo "Restoring into the root of a pool ($dataset) is not supported (or even possible?)" ; \return 1 ; fi
         if [[ ! @{config.setup.zfs.pools!catAttrSets.createDuringInstallation[${dataset%%/*}]} ]] ; then continue ; fi
@@ -52,7 +52,7 @@ function restore-zfs-dataset { # 1: source, 2: dataset, ...: syncoidOptions
         PATH=@{native.sanoid}/bin/:$PATH "${syncoid[@]}" || return
     fi
 
-    PATH=@{native.zfs}/bin/:$PATH run-hook-script 'Post Restore Commands' @{config.my.services.zfs.send.postRestoreCommands!writeText.postRestoreCommands} || return
+    PATH=@{native.zfs}/bin/:$PATH run-hook-script 'Post Restore Commands' @{config.wip.services.zfs.send.postRestoreCommands!writeText.postRestoreCommands} || return
 
     ensure-datasets "${mnt:-/}" "^$dataset($|[/])" || return
     : | @{native.zfs}/bin/zfs load-key -r "$dataset" || true

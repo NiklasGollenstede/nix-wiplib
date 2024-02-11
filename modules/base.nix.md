@@ -13,13 +13,6 @@ dirname: inputs: moduleArgs@{ config, options, pkgs, lib, ... }: let lib = input
     prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer;
     cfg = config.${prefix}.base;
     outputName = config.${installer}.outputName;
-    toFlakeRef = input: { inherit (input) lastModified narHash; } // (let
-        match = builtins.match ''(${builtins.storeDir}/.*)/(.*)'' input.outPath;
-    in if match != null then {
-        type = "git"; url = "file://${builtins.elemAt match 0}"; dir = builtins.elemAt match 1;
-    } else {
-        type = "path"; path = input.outPath;
-    });
     byDefault = { default = true; example = false; };
     ifKnowsSelf = { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${config.${prefix}.installer.outputName}"; example = false; };
 in {
@@ -33,14 +26,11 @@ in {
         ) // (
             if inputs?self.outputs.outPath then { self = inputs.self // { outPath = inputs.self.outputs.outPath; }; } else { } # see inputs.functions.lib.imports.importRepo
         )); };
-        selfInputName = lib.mkOption { description = "name of »config.${prefix}.base.includeInputs.self« flake"; type = lib.types.nullOr lib.types.str; default = "nixos-config"; };
+        selfInputName = lib.mkOption { description = "name of »config.${prefix}.base.includeInputs.self« flake"; type = lib.types.str; default = "nixos-config"; };
         panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // byDefault; # It's stupidly hard to remove items from lists ...
         showDiffOnActivation = lib.mkEnableOption "showing a diff compared to the previous system on activation of this new system (generation)" // byDefault;
         autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // ifKnowsSelf;
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // byDefault;
-
-        accurateImpurePkgs = lib.mkEnableOption "setting the »<nixpkgs>« reference to use the system's overlays and nixpkgs config, for impure Nix commands" // ifKnowsSelf;
-        syspkgs.enable = lib.mkEnableOption "setting the »<nixpkgs>« reference to use the system's overlays and nixpkgs config, for impure Nix commands" // ifKnowsSelf;
     }; };
 
     imports = lib.optional ((builtins.substring 0 5 inputs.nixpkgs.lib.version) <= "22.05") (lib.fun.overrideNixpkgsModule "misc/extra-arguments.nix" { } (old: { config._module.args.utils = old._module.args.utils // {
@@ -49,8 +39,9 @@ in {
 
     config = let
 
-    in lib.mkIf cfg.enable (lib.mkMerge [ ({
-
+    in lib.mkIf cfg.enable (lib.mkMerge [ (
+        lib.optionalAttrs (options.nix.channel?enable) { nix.channel.enable = lib.mkDefault false; }
+    ) ({
         users.mutableUsers = false; users.allowNoPasswordLogin = true; # Don't babysit. Can roll back or redeploy.
         networking.hostId = lib.mkDefault (builtins.substring 0 8 (builtins.hashString "sha256" config.networking.hostName));
         environment.etc."machine-id".text = lib.mkDefault (builtins.substring 0 32 (builtins.hashString "sha256" "${config.networking.hostName}:machine-id")); # this works, but it "should be considered "confidential", and must not be exposed in untrusted environments" (not sure _why_ though)
@@ -96,7 +87,7 @@ in {
         '';
 
         # Add all (direct) inputs to the flake registry:
-        nix.registry = lib.mapAttrs (name: input: lib.mkDefault { to = toFlakeRef input; }) (
+        nix.registry = lib.mapAttrs (name: input: lib.mkDefault { to = lib.wip.toFlakeRef input; }) (
             (lib.optionalAttrs (cfg.includeInputs?self) { ${cfg.selfInputName} = cfg.includeInputs.self; })
             // (builtins.removeAttrs cfg.includeInputs [ "self" ])
         );
@@ -106,47 +97,13 @@ in {
             type = "derivation"; outPath = toString input; # required when using newer versions of Nix (~1.14+) with older versions of nixpkgs (pre 23.05?)
         }) (lib.flatten (map getInputs (lib.attrValues cfg.includeInputs)));
 
-    }) (lib.mkIf (cfg.syspkgs.enable) {
 
-        nix.registry = let
-            nixos-config = if cfg.selfInputName != null then cfg.selfInputName else "nixos-config";
-        in { syspkgs.flake = pkgs.runCommandLocal "syspkgs" {
-            flake_nix = ''{ outputs = { ${nixos-config}, ... }: {
-                legacyPackages.${pkgs.system} = ${nixos-config}.nixosConfigurations.${outputName}.pkgs;
-            }; }'';
-            flake_lock = let lock = lib.importJSON "${cfg.includeInputs.self}/flake.lock" ; in builtins.toJSON {
-                inherit (lock) version; root = "root"; nodes = (lib.mapAttrs (k: dep: dep // (lib.optionalAttrs (dep?inputs) {
-                inputs = lib.mapAttrs (k: ref: if lib.isString ref then ref else [ nixos-config ] ++ ref) dep.inputs;
-            })) lock.nodes) // { ${nixos-config} = {
-                inputs = lock.nodes.root.inputs; original = { id = nixos-config; type = "indirect"; };
-                locked = toFlakeRef cfg.includeInputs.self;
-            }; root.inputs = { ${nixos-config} = nixos-config; }; }; };
-        } ''
-            mkdir $out
-            <<<"$flake_nix" cat > $out/flake.nix
-            <<<"$flake_lock" cat > $out/flake.lock
-        ''; };
+    }) (lib.mkIf (ifKnowsSelf.default) {
 
-
-    }) (lib.mkIf (cfg.accurateImpurePkgs) {
-
-        # Importing »<nixpkgs>« as non-flake returns a lambda returning the evaluated Nix Package Collection (»pkgs«). The most accurate representation of what that should be on the target host is the »pkgs« constructed when building it:
-        system.extraSystemBuilderCmds = ''
-            ln -sT ${pkgs.writeText "pkgs.nix" ''
-                # Provide the exact same version (except for modifications by »args«) of (nix)pkgs on the CLI as in the NixOS-configuration (this may be quite a bit slower than merely »import inputs.nixpkgs«, as it partially evaluates the host's configuration):
-                let
-                    system = (builtins.getFlake ${builtins.toJSON cfg.includeInputs.self}).nixosConfigurations.${outputName};
-                    nixpkgs = import ${builtins.toJSON cfg.includeInputs.nixpkgs};
-                in args: nixpkgs ({
-                    inherit (system.config.nixpkgs) config; # TODO: some good merging logic on this would be nice
-                } // args // {
-                    overlays = (args.overlays or [ ]) ++ system.config.nixpkgs.overlays;
-                })
-                # args: (system.extendModules { modules = [ { config.nixpkgs = args; _file = "<nixpkgs-args>"; } ]; })._module.args.pkgs
-            ''} $out/pkgs # (nixpkgs with overlays)
-        ''; # (use this indirection so that all open shells update automatically)
-
-        nix.nixPath = [ "nixpkgs=/run/current-system/pkgs" ]; # this intentionally replaces the defaults: nixpkgs is here, /etc/nixos/flake.nix is implicit, channels are impure
+        nix.syspkgs.enable = true;
+        nix.syspkgs.hostName = outputName;
+        nix.syspkgs.nixos-config.name = cfg.selfInputName;
+        nix.syspkgs.nixos-config.flake = cfg.includeInputs.self;
 
 
     }) (lib.mkIf (cfg.autoUpgrade) {

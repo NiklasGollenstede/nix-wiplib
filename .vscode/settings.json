@@ -96,6 +96,7 @@
 		"pkgs", // nix
 		"pname", // nix/abbr (package name)
 		"posix", // word
+		"postgresql", // program
 		"poweroff", // program / function
 		"poweron", // concat
 		"psqlSchema", // abbr
@@ -105,6 +106,7 @@
 		"raspberrypifw", // package
 		"readlink", // program / function
 		"realpath", // program / function
+		"recvoptions", // zfs: syncoid
 		"reexec", // option
 		"refreservation", // zfs
 		"robotnix", // package
@@ -115,6 +117,7 @@
 		"rtkit", // program
 		"sanoid", // program
 		"sbabic", // name
+		"sendoptions", // zfs: syncoid
 		"sgdisk", // program
 		"stdenv", // nix
 		"stty", // program / function
@@ -134,8 +137,9 @@
 		"udev", // program
 		"udptunnel", // program
 		"UEFI", // abbr
-		"unbootable", // word
 		"unalias", // bash
+		"unallow", // zfs
+		"unbootable", // word
 		"urandom", // linux
 		"usbhid", // kmod
 		"vcgencmd", // program

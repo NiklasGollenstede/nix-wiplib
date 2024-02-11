@@ -18,8 +18,8 @@ in {
 
     options = { services.postgresql = {
         prevPackage = lib.mkOption { description = lib.mdDoc ''For automatic major version upgrades/migrations, the PostgreSQL package used before the current `.package`.''; type = lib.types.nullOr lib.types.package; default = null; example = lib.literalExpression "pkgs.postgresql_15"; };
-        prevDataDir = lib.mkOption { type = lib.types.path; };
-        upgradeArgs = lib.mkOption { description = lib.mdDoc "Extra CLI arguments provided to `pg_upgrade` during automatic major version upgrades."; type = lib.types.listOf lib.types.str; default = [ ]; };
+        prevDataDir = lib.mkOption { description = lib.mdDoc ''For automatic major version upgrades/migrations, the previous `.dataDir` (if that was set explicitly).''; type = lib.types.path; };
+        upgradeArgs = lib.mkOption { description = lib.mdDoc ''Extra CLI arguments provided to `pg_upgrade` during automatic major version upgrades.''; type = lib.types.listOf lib.types.str; default = [ ]; };
     }; };
 
     config = lib.mkIf (cfg.enable && cfg.prevPackage != null) (let
