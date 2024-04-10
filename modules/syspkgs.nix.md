@@ -46,7 +46,9 @@ in {
                     system = ${cfg.nixos-config.name}.nixosConfigurations.${lib.strings.escapeNixIdentifier cfg.hostName};
                 in system.pkgs // { # (this is probably slower than `import nixpkgs { }`, since it partially evaluates the system configuration as well)
                     # This allows you to use unfree packages (and individually acknowledge their "unfree" nature) on the CLI:
-                    unfree = (system.extendModules { modules = [ { nixpkgs.config.allowUnfree = true; } ]; }).pkgs; # (using packages from the base package set and thi one will cause two evaluations)
+                    unfree = (system.extendModules { modules = [ { nixpkgs.config.allowUnfree = true; } ]; }).pkgs; # (using packages from the base package set and this one will cause two evaluations)
+                    # This allows you to use bad packages (broken, insecure, unsupported platform) on the CLI:
+                    bad = (system.extendModules { modules = [ { nixpkgs.config = { allowUnfree = true; allowInsecurePredicate = _: true; allowUnsupportedSystem = true; allowBroken = true; }; } ]; }).pkgs; # (using packages from the base package set and this one will cause two evaluations)
                 };
             }; }'';
             flake_lock = let
@@ -72,24 +74,28 @@ in {
             <<<"$flake_lock" cat > $out/flake.lock
         ''; };
 
-        environment.etc = lib.mkIf cfg.legacy  { "nix/nixpkgs.nix".text = ''
+        environment.etc = lib.mkIf cfg.legacy ({ "nix/nixpkgs/default.nix".text = ''
             # Provide the exact same version (except for modifications by »args«) of (nix)pkgs on the CLI as in the NixOS-configuration (this may be quite a bit slower than merely »import inputs.nixpkgs«, as it partially evaluates the host's configuration):
             let
                 system = (builtins.getFlake ${builtins.toJSON "${cfg.nixos-config.flake}"}).nixosConfigurations.${lib.strings.escapeNixIdentifier cfg.hostName};
                 nixpkgs = import ${builtins.toJSON "${cfg.nixos-config.flake.inputs.nixpkgs}"};
-            in args: if args == { } then system.pkgs else nixpkgs (args // {
+            in args: if !(builtins?getFlake) then nixpkgs args else if args == { } then system.pkgs else nixpkgs (args // {
                 config = system.config.nixpkgs.config // (args.config or { }); # TODO: some better merging logic on this would be nice
                 overlays = system.config.nixpkgs.overlays ++ (args.overlays or [ ]);
             })
             # args: (system.extendModules { modules = [ { config.nixpkgs = args; _file = "<nixpkgs-args>"; } ]; }).pkgs # this has marginally better merging logic for `args.config`, but also changes the interpretation of `args`
-        ''; }; # (use this indirection so that all open shells update automatically)
+        ''; } // {
+            "nix/nixpkgs/lib".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/lib"; # some legacy Nix code may import <nixpkgs/lib>
+            "nix/nixpkgs/pkgs".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/pkgs"; # ... which imports this
+            "nix/nixpkgs/nixos".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/pkgs"; # also import <nixpkgs/nixos>
+        });
 
         nix.settings.nix-path = lib.mkIf (cfg.legacy && !(config.nix.channel?enable && config.nix.channel.enable)) [
             # This seems to take precedence over »nix.nixPath«, and it is is set if »!config.nix.channel.enable«.
-            "nixpkgs=/etc/nix/nixpkgs.nix" # (here, this could directly point to the nix file)
+            "nixpkgs=/etc/nix/nixpkgs" # (here, this could directly point to the nix file)
         ];
         nix.nixPath = lib.mkIf (cfg.legacy && (config.nix.channel?enable && config.nix.channel.enable)) ([
-            "nixpkgs=/etc/nix/nixpkgs.nix"
+            "nixpkgs=/etc/nix/nixpkgs" # (use indirection so that all open shells update automatically)
             "nixos-config=/etc/nixos/configuration.nix"
             "/nix/var/nix/profiles/per-user/root/channels"
         ]);

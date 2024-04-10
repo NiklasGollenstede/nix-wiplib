@@ -2,23 +2,24 @@
 
 set -o pipefail -u
 
-targetHost=${1:?}
-predicate=${2:-switch}
+targetHost=${1:?} ; shift
+predicate=${1:-switch} ; shift
 
 #[[ targetHost =~ ^[a-z0-9-]+$ ]]
 hostname=$( ssh "$targetHost" -- hostname ) || exit
 
-drvPath=$( nix eval --raw .#nixosConfigurations."$hostname".config.system.build.toplevel.drvPath ) || exit
+drvPath=$( nix eval --raw .#nixosConfigurations."$hostname".config.system.build.toplevel.drvPath "$@" ) || exit
 
 PATH=@{pkgs.openssh}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:$PATH @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' copy --to ssh://"$targetHost" --derivation "$drvPath^*" || exit
 
 ssh -q -t "$targetHost" -- "$( function remote { set -o pipefail -u
+	drvPath=$1 ; shift ; predicate=$1 ; shift
 	function version-gr-eq { printf '%s\n%s' "$1" "$2" | LC_ALL=C sort -C -V -r ; }
     output= ; if version-gr-eq "$( nix --version | grep -Poe '\d+.*' )" '2.14' ; then output='^out' ; fi
-	systemPath=$( nix build --no-link --print-out-paths "$1"$output ) || exit
+	systemPath=$( nix build --no-link --print-out-paths "$drvPath"$output "$@" ) || exit
 	nix-env -p /nix/var/nix/profiles/system --set "$systemPath" || exit
-	"$systemPath"/bin/switch-to-configuration "$2" || exit
-} ; declare -f remote ) ; remote $( printf ' %q' "$drvPath" "$predicate" )" || exit
+	"$systemPath"/bin/switch-to-configuration "$predicate" || exit
+} ; declare -f remote ) ; remote $( printf ' %q' "$drvPath" "$predicate" "$@" )" || exit
 
 exit
 

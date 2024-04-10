@@ -37,7 +37,7 @@ declare-command restore-zfs-dataset source target ...syncoidOptions << 'EOD'
 Syncs the ZFS dataset »source« to the target »dataset«, and (assuming »dataset« is a dataset of the current host whose »/« is imported at »$mnt«) restores the ZFS properties on »dataset«.
 EOD
 function restore-zfs-dataset { # 1: source, 2: dataset, ...: syncoidOptions
-    local source=$1 dataset=$2 ; shift ; shift
+    local source=$1 dataset=$2 ; shift ; shift # (Do not change these names, they may be used in the »postRestoreCommands«.)
     local syncoid=( syncoid --no-privilege-elevation --recursive --sendoptions='w' --recvoptions='u' --compress=none "$@" "$source" "$dataset" )
 
     echo "Restoring $dataset from $source with command:"

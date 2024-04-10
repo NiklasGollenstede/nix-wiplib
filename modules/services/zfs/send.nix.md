@@ -60,7 +60,7 @@ in { imports = [ {
                 locations = lib.mkMerge ((lib.mapAttrsToList (_: target: lib.mkOrder 1000 [ "${targetSpec sourceArgs.config target}" ]) sourceArgs.config.targets) ++ [ (lib.mkOrder 2000 [ "${config.networking.hostName}:${name}" ]) ]);
             }; })));
         };
-        postRestoreCommands = lib.mkOption { description = ""; type = lib.types.lines; default = ""; };
+        postRestoreCommands = lib.mkOption { description = "When installing the system with `--zfs-restore`, bash commands to be run after each dataset in `.datasets` (whose local path will be in `$dataset`) has been restored."; type = lib.types.lines; default = ""; };
         forwardPendingProperty = lib.mkOption { default = "forward:pending-to"; type = lib.types.strMatching ''^[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$''; };
     }; };
 
