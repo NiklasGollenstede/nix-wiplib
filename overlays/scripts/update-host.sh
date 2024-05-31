@@ -17,8 +17,9 @@ ssh -q -t "$targetHost" -- "$( function remote { set -o pipefail -u
 	function version-gr-eq { printf '%s\n%s' "$1" "$2" | LC_ALL=C sort -C -V -r ; }
     output= ; if version-gr-eq "$( nix --version | grep -Poe '\d+.*' )" '2.14' ; then output='^out' ; fi
 	systemPath=$( nix build --no-link --print-out-paths "$drvPath"$output "$@" ) || exit
-	nix-env -p /nix/var/nix/profiles/system --set "$systemPath" || exit
-	"$systemPath"/bin/switch-to-configuration "$predicate" || exit
+	sudo= ; if [[ ${UID:-0} != 0 ]] ; then sudo=sudo ; fi
+	$sudo nix-env -p /nix/var/nix/profiles/system --set "$systemPath" || exit
+	$sudo "$systemPath"/bin/switch-to-configuration "$predicate" || exit
 } ; declare -f remote ) ; remote $( printf ' %q' "$drvPath" "$predicate" "$@" )" || exit
 
 exit

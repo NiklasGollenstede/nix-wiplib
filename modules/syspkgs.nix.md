@@ -17,12 +17,15 @@ in {
         enable = lib.mkEnableOption ''
             making `nixpkgs`/`pkgs`, exactly as configured, applied with overlays, and otherwise modified during the current system's build process, available to the system's (flake-based) `nix` CLI as `syspkgs`(`.legacyPackages`).
             For flake-defined systems only. This makes the system depend on all it's evaluation flake inputs.
-            An additional (`legacyPackages.`)`unfree` exposes `pkgs` with `config.allowUnfree = true`.
+            An additional (`legacyPackages.`)`unfree` exposes `pkgs` with `config.allowUnfree = true`. `bad` additionally also allows using packages that are marked as insecure, unsupported-system, or broken.
+            This works ell together with the `with` shell alias/function.
 
             Usage examples:
             `nix run syspkgs#patched-prog`
             `nix run syspkgs#added-package`
             `nix run syspkgs#unfree.google-chrome`
+            `nix run syspkgs#bad.python27`
+            `with patched-prog unfree.google-chrome bad.python27 -- python ./...`
         '';
         legacy = lib.mkOption { description = ''
             Also make `nixpkgs`/`pkgs`, exactly as configured, applied with overlays, and otherwise modified during the current system's build process, available as `nixpkgs=` on the `NIX_PATH`, so that it can be used in legacy/non-flake nix CLI calls and programs.
@@ -87,7 +90,7 @@ in {
         ''; } // {
             "nix/nixpkgs/lib".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/lib"; # some legacy Nix code may import <nixpkgs/lib>
             "nix/nixpkgs/pkgs".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/pkgs"; # ... which imports this
-            "nix/nixpkgs/nixos".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/pkgs"; # also import <nixpkgs/nixos>
+            "nix/nixpkgs/nixos".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/nixos"; # also import <nixpkgs/nixos>
         });
 
         nix.settings.nix-path = lib.mkIf (cfg.legacy && !(config.nix.channel?enable && config.nix.channel.enable)) [

@@ -3,7 +3,7 @@ function with { # (this script needs to be "source"d)
 #[[ $( </etc/nix/registry.json jq '.flakes[]|select(.from.id == "syspkgs")|any' 2>/dev/null ) ]]
 nixpkgs=nixpkgs ; if </etc/nix/registry.json grep -qe '"from":{"id":"syspkgs","type":"indirect"' 2>/dev/null ; then nixpkgs=syspkgs ; fi
 
-local help="Synopsys: With the Nix packages »PKGS« (implicitly as flake build outputs from $nixpkgs, or explicitly from other flakes), run »CMD« with »ARGS«, or »$SHELL« if no »CMD« is supplied. In the second form, »CMD« is the same as the last »PKGS« entry. With »-i«, add the packages to the current shell's »$PATH«. With »-l«, ls the »bin/« dir of each package.
+local help="Synopsys: With the Nix packages »PKGS« (implicitly as flake build outputs from $nixpkgs, or explicitly from other flakes), run »CMD« with »ARGS«, or »$SHELL« if no »CMD« is supplied. In the second form, »CMD« is the same as the last »PKGS« entry. With »-i«, add the packages to the current shell's »\$PATH«. With »-l«, ls the »bin/« dir of each package.
 Usage: with [-h] PKGS... [-- [CMD [ARGS...]]]
        with [-h] PKGS... [. [ARGS...]]
        with [-h] PKGS... -i

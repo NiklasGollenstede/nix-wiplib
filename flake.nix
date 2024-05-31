@@ -5,7 +5,7 @@
 ); inputs = {
 
     # To update »./flake.lock«: $ nix flake update
-    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-23.11"; };
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-24.05"; };
     nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; };
     functions = { url = "github:NiklasGollenstede/nix-functions"; inputs.nixpkgs.follows = "nixpkgs"; };
     installer = { url = "github:NiklasGollenstede/nixos-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.functions.follows = "functions"; };
@@ -22,7 +22,7 @@ in [ # Run »nix flake show --allow-import-from-derivation« to see what this me
 
     (lib.fun.forEachSystem (import inputs.systems) (localSystem: let
         pkgs = lib.fun.importPkgs inputs { system = localSystem; };
-    in { packages.builder-shell = (lib.wip.vps-worker rec {
+    in { packages.builder-shell = (lib.wip.vps-worker {
         inherit pkgs inputs; name = "builder"; serverType = lib.wip.vps-worker.serverTypes.cax11;
         debug = true; ignoreKill = true;
     }).shell; }))
