@@ -27,6 +27,7 @@
 		"CWD", // abbr
 		"cykerway", // name
 		"datadir", // abbr
+		"debian", // name
 		"dontUnpack", // nixos
 		"dropbear", // program
 		"dtoverlay", // option
@@ -93,6 +94,7 @@
 		"ntfs", // filesystem
 		"ondemand", // concat
 		"oneshot", // systemd
+		"openssh", // package
 		"optimise", // B/E
 		"partlabel", // linux
 		"partprobe", // program / function
