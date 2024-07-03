@@ -103,5 +103,11 @@ in {
             "/nix/var/nix/profiles/per-user/root/channels"
         ]);
 
+        system.extraDependencies = let # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
+            getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues (flake.inputs or { })));
+        in map (input: {
+            type = "derivation"; outPath = toString input; # required when using newer versions of Nix (~1.14+) with older versions of nixpkgs (pre 23.05?)
+        }) (getInputs cfg.nixos-config.flake);
+
     };
 }

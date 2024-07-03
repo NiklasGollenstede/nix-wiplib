@@ -15,7 +15,7 @@
 }; outputs = inputs@{ self, ... }: inputs.functions.lib.importRepo inputs ./. (repo@{ overlays, ... }: let
     lib = repo.lib.__internal__;
 in [ # Run »nix flake show --allow-import-from-derivation« to see what this merges to:
-    repo # lib.* nixosModules.* overlays.*
+    repo # lib.* nixosModules.* overlays.* (legacy)packages.*.* patches.*
 
     (lib.inst.mkSystemsFlake { inherit inputs; asDefaultPackage = true; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems
     { templates.default = { path = "${self}/example/template"; description = "NixOS host(s) configuration"; }; }

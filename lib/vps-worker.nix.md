@@ -24,7 +24,7 @@ For now, there is not much documentation, but here is at least a short / shorten
     nix = "PATH=${pkgs.openssh}/bin:$PATH ${pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes'";
 
 in pkgs.writeShellScriptBin "lineage-build-remote" ''
-    ${lib.fun.extractBashFunction (builtins.readFile lib.inst.setup-scripts.utils) "prepend_trap"}
+    source ${lib.fun.bash.prepend_trap}
     set -u ; set -x
     baseDir=$1
 
@@ -276,7 +276,6 @@ in let vps-worker = ({
         export HCLOUD_TOKEN ; HCLOUD_TOKEN=''${HCLOUD_TOKEN:-$( ${tokenCmd} )} || exit
         ${cmds}
     '';
-    prepend_trap = lib.fun.extractBashFunction (builtins.readFile lib.inst.setup-scripts.utils) "prepend_trap";
     hcloud = "${pkgs.hcloud}/bin/hcloud";
 
     installTokenCmd = ''
@@ -284,7 +283,7 @@ in let vps-worker = ({
     '';
 
     cerateCmd = ''
-        ${prepend_trap}
+        source ${lib.fun.bash.prepend_trap}
         set -o pipefail -u${if debug then "x" else ""}
 
         keys=${keysOutPath} ; rm -rf "$keys" && mkdir -p "$keys" && chmod 750 "$keys" || exit

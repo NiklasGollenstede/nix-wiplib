@@ -91,8 +91,8 @@ in { imports = [ {
 
 
     })) (lib.mkIf (cfg.dataset != null) (let
-        gc-service = import ./utils/gc-sync-snaps-service.nix { inherit (cfg) dataset; inherit pkgs lib; label = config.${prefix}.services.zfs.send.forwardPendingProperty; };
-        reset-service = import ./utils/reset-recv-service.nix { inherit (cfg) dataset; inherit pkgs lib; };
+        gc-service = (lib.fun.importWrapped inputs "${dirname}/utils/gc-sync-snaps-service.nix").result { inherit (cfg) dataset; inherit pkgs lib; label = config.${prefix}.services.zfs.send.forwardPendingProperty; };
+        reset-service = (lib.fun.importWrapped inputs "${dirname}/utils/reset-recv-service.nix").result { inherit (cfg) dataset; inherit pkgs lib; };
         ensurePendingProp = source: "+" + ''/run/booted-system/sw/bin/zfs set ${config.${prefix}.services.zfs.send.forwardPendingProperty}=${lib.concatStringsSep ":" source.forwardingTo} ${source.path}'';
     in {
         ## Prune snapshots in backup »dataset«

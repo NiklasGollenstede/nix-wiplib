@@ -1,4 +1,4 @@
-{ pkgs, lib, dataset, ... }: let
+dirname: inputs: { pkgs, lib, dataset, ... }: let
     script = pkgs.runCommandLocal "reset-recv-script" {
         script = ./reset-recv.sh; nativeBuildInputs = [ pkgs.buildPackages.makeWrapper ];
     } ''makeWrapper $script $out --prefix PATH : ${"/run/booted-system/sw/bin"}'';

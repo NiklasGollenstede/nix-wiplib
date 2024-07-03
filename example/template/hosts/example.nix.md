@@ -33,16 +33,16 @@ in { preface = {
 
     wip.base.enable = true;
     documentation.enable = false; # sometimes takes quite long to build
-    services.getty.autologinUser = "root"; # users.users.root.password = "root";
+    services.getty.autologinUser = "root";
 
 }) ({ ## Enable SSHd
     services.openssh.enable = true;
-    environment.systemPackages = [ pkgs.curl ];
     systemd.tmpfiles.rules = [
         (lib.fun.mkTmpfile { type = "L+"; path = "/root/.ssh"; argument = "/remote/root/.ssh/"; })
         (lib.fun.mkTmpfile { type = "d"; path = "/remote/root/.ssh/"; mode = "700"; })
         (lib.fun.mkTmpfile { type = "f"; path = "/remote/root/.ssh/authorized_keys"; mode = "600"; })
     ];
+    environment.systemPackages = [ pkgs.curl ]; # curl https://github.com/$user.keys >>/root/.ssh/authorized_keys
 
 }) ({ ## qemu
     #boot.kernelParams = [ "console=ttyS0" ]; # Only during testing in VM.

@@ -28,6 +28,7 @@
 		"cykerway", // name
 		"datadir", // abbr
 		"debian", // name
+		"defexpr", // nix
 		"dontUnpack", // nixos
 		"dropbear", // program
 		"dtoverlay", // option
@@ -47,6 +48,7 @@
 		"fw_printenv", // program
 		"fw_setenv", // program
 		"genkeytypes", // concat
+		"getent", // program / function
 		"getsize64", // cli arg
 		"getty", // program
 		"github", // name
@@ -68,6 +70,7 @@
 		"keygen", // program
 		"leds", // plural
 		"libblockdev", // package
+		"libexec", // linux
 		"libraspberrypi", // program
 		"libubootenv", // package
 		"libyaml", // package
@@ -77,6 +80,7 @@
 		"mkenvimage", // program
 		"mktemp", // program / function
 		"mountpoint", // program / function
+		"mtab", // linux
 		"namei", // program
 		"namespacing", // word
 		"netns", // linux
@@ -88,6 +92,7 @@
 		"nodiscard", // cli arg
 		"noexec", // mount option
 		"nofile", // option (number of files)
+		"NOPASSWD", // sudo
 		"noprofile", // option
 		"nosuid", // mount option
 		"notrunc", // dd option
@@ -96,9 +101,11 @@
 		"oneshot", // systemd
 		"openssh", // package
 		"optimise", // B/E
+		"overridable", // word
 		"partlabel", // linux
 		"partprobe", // program / function
 		"passthru", // nix
+		"passwordless", // word
 		"pipefail", // bash
 		"pkgs", // nix
 		"pname", // nix/abbr (package name)
@@ -111,11 +118,13 @@
 		"raidz", // zfs
 		"raspberrypi", // abbr
 		"raspberrypifw", // package
+		"rbind", // linux
 		"readlink", // program / function
 		"realpath", // program / function
 		"recvoptions", // zfs: syncoid
 		"reexec", // option
 		"refreservation", // zfs
+		"resolv", // linux
 		"robotnix", // package
 		"rootfs", // abbr (root filesystem)
 		"rpiboot", // package
@@ -126,9 +135,14 @@
 		"sbabic", // name
 		"sendoptions", // zfs: syncoid
 		"sgdisk", // program
+		"sgid", // linux
+		"specialfs", // nix
 		"stdenv", // nix
 		"stty", // program / function
+		"subgid", // linux
+		"subuid", // linux
 		"syncoid", // program
+		"sysfs", // linux
 		"syslinux", // package
 		"syspkgs", // abbr (system packages)
 		"sysrq", // linux
@@ -147,6 +161,7 @@
 		"unalias", // bash
 		"unallow", // zfs
 		"unbootable", // word
+		"unmanaged", // word
 		"urandom", // linux
 		"usbhid", // kmod
 		"vcgencmd", // program

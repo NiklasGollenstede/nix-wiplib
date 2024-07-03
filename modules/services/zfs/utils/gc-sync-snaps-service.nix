@@ -1,4 +1,4 @@
-{ pkgs, lib, dataset, label, ... }: let
+dirname: inputs: { pkgs, lib, dataset, label, ... }: let
     script = pkgs.runCommandLocal "gc-sync-snaps-script" {
         script = ./gc-sync-snaps.sh; nativeBuildInputs = [ pkgs.buildPackages.makeWrapper ];
     } ''makeWrapper $script $out --prefix PATH : ${"/run/booted-system/sw/bin"}'';
