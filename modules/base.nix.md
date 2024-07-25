@@ -48,6 +48,8 @@ in {
         documentation.man.enable = lib.mkDefault config.documentation.enable;
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
         nix.settings.ignore-try = lib.mkDefault true; # Use »--option ignore-try false« on the CLI to revert this.
+        nix.settings.flake-registry = lib.mkDefault ""; # Disable the global (online) flake registry.
+        #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
         boot.kernelParams = [ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail"); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
@@ -118,9 +120,7 @@ in {
 
         system.autoUpgrade = {
             enable = lib.mkDefault true; channel = null;
-            flake = "$flakePath#${config.${installer}.outputName}";
-            flags = map (dep: if dep == "self" then "" else "--update-input ${dep}") (builtins.attrNames cfg.includeInputs); # there is no "--update-inputs"
-            # (Since all inputs to the system flake are linked as system-level flake registry entries, even "indirect" references that don't really exist on the target can be "updated" (which keeps the same hash but changes the path to point directly to the nix store).)
+            flake = "."; # $flakePath#${config.${installer}.outputName}
             dates = lib.mkDefault "05:40"; randomizedDelaySec = lib.mkDefault "30min";
             allowReboot = lib.mkDefault false;
         };
@@ -131,18 +131,23 @@ in {
             if [[ -e $flakePath/flake.lock && ! -w $( realpath "$flakePath" )/flake.lock ]] ; then
                 flakePath=$( realpath "$flakePath" )
                 dir= ; if [[ $flakePath == /nix/store/*/* ]] ; then
-                    dir=''${flakePath#/nix/store/*/}
+                    dir="''${flakePath#/nix/store/*/}"
                 fi
-                tmpdir=$( mktemp -d --tmpdir -- ${lib.escapeShellArg cfg.selfInputName}.XXXXXXXXXX ) && trap "rm -rf $tmpdir" EXIT &&
-                cp -dr -T "$( realpath "''${flakePath%$dir}" )" "$tmpdir" ; chmod +w "$tmpdir"/"$dir"/flake.lock
+                tmpdir=$( mktemp -d --tmpdir -- ${lib.escapeShellArg cfg.selfInputName}.XXXXXXXXXX ) && trap "rm -rf $tmpdir" EXIT || exit
+                cp -dr -T "$( realpath "''${flakePath%$dir}" )" "$tmpdir" && chmod +w "$tmpdir"/"$dir"/flake.lock || exit
                 if [[ $dir ]] ; then
-                    ( cd "$tmpdir" ; git init --quiet ; git add --all )
-                    flakePath=git+file://$tmpdir?dir=$dir
+                    ( cd "$tmpdir" && git init --quiet && git add --all ) || exit
+                    flakePath=$tmpdir/"$dir" # git+file://$tmpdir?dir="$dir"
                 else
-                    flakePath=path://$tmpdir
+                    flakePath=$tmpdir # path://$tmpdir
                 fi
             fi
-        '';
+            cd "$flakePath" || exit
+
+            nix --extra-experimental-features 'nix-command flakes' flake update ${/* lib.escapeShellArgs (not split properly) */ toString config.system.autoUpgrade.flags}
+        ''; # (Since all inputs to the system flake are linked as system-level flake registry entries, even "indirect" references that don't really exist on the target can be "updated" (which keeps the same hash but changes the path to point directly to the nix store).)
+
+        # TODO: reboots
 
     }) ({
 

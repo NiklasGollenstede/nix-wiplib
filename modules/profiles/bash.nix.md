@@ -23,17 +23,17 @@ in {
 
         environment.shellAliases = {
 
-            "with" = "source ${../../overlays/scripts/with.sh} ; unalias with ; complete -D with ; with"; # »with« doesn't seem to be a common unix command yet, and it makes sense here: with package(s) => do stuff
+            "with" = "function with { local supportInline=1 ; source ${../../pkgs/scripts/with.sh} ; } ; unalias with ; complete -D with ; with"; # »with« doesn't seem to be a common unix command yet, and it makes sense here: with package(s) => do stuff
 
             ls = "ls --color=auto"; # (default)
             l  = "ls -alhF"; # (added F)
             ll = "ls -alF"; # (added aF)
-            lt = "tree -a -p -g -u -s -D -F --timefmt '%Y-%m-%d %H:%M:%S'"; # ll like tree
+            lt = "${lib.getExe pkgs.tree} -a -p -g -u -s -D -F --timefmt '%Y-%m-%d %H:%M:%S'"; # ll like tree
             lp = pkgs.writeShellScript "lp" ''abs="$(cd "$(dirname "$1")" ; pwd)"/"$(basename "$1")" ; ${pkgs.util-linux}/bin/namei -lx "$abs"''; # similar to »ll -d« on all path element from »$1« to »/«
 
             ips = "ip -c -br addr"; # colorized listing of all interface's IPs
             #mounts = pkgs.writeShellScript "mounts" ''${pkgs.util-linux}/bin/mount | if [[ ''${1:-} ]] ; then ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/' | ${pkgs.gnugrep}/bin/grep -Pe ' on '"$1" ; else ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/| on /var/lib/docker/|^/var/lib/snapd/snaps/' ; fi | LC_ALL=C ${pkgs.coreutils}/bin/sort -k3 | ${pkgs.util-linux}/bin/column -t -N Device/Source,on,Mountpoint,type,Type,Options -H on,type -W Device/Source,Mountpoint,Options''; # the output of »mount«, cleaned up and formatted as a sorted table # (...grep ' on /'"''${1#/}")
-            mounts = pkgs.writeShellScript "mounts" ''cat /proc/mounts | if [[ ''${1:-} ]] ; then ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/' | ${pkgs.gnugrep}/bin/grep -Pe ' '"$1" ; else ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/| /var/lib/docker/|^/var/lib/snapd/snaps/' ; fi | LC_ALL=C ${pkgs.coreutils}/bin/sort -k2 | ${pkgs.util-linux}/bin/column -t -N Device/Source,Mountpoint,Type,Options,X,Y -H X,Y -W Device/Source,Mountpoint,Options''; # »/proc/mounts«, cleaned up and formatted as a sorted table (the output of »mount« does not escape whitespace)
+            mounts = pkgs.writeShellScript "mounts" ''${pkgs.coreutils}/bin/cat /proc/mounts | if [[ ''${1:-} ]] ; then ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/' | ${pkgs.gnugrep}/bin/grep -Pe ' '"$1" ; else ${pkgs.gnugrep}/bin/grep -vPe '/.zfs/snapshot/| /var/lib/docker/|^/var/lib/snapd/snaps/' ; fi | LC_ALL=C ${pkgs.coreutils}/bin/sort -k2 | ${pkgs.util-linux}/bin/column -t -N Device/Source,Mountpoint,Type,Options,X,Y -H X,Y -W Device/Source,Mountpoint,Options''; # »/proc/mounts«, cleaned up and formatted as a sorted table (the output of »mount« does not escape whitespace)
 
             netns-exec = pkgs.writeShellScript "netns-exec" ''ns=$1 ; shift ; /run/wrappers/bin/firejail --noprofile --quiet --netns="$ns" -- "$@"''; # execute a command in a different netns (like »ip netns exec«), without requiring root permissions (but does require »config.programs.firejail.enable=true«)
 

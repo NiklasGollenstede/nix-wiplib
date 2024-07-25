@@ -1,0 +1,72 @@
+diff --git a/lib/default.nix b/lib/default.nix
+index ecf4fbb75339..d152362f25cb 100644
+--- a/lib/default.nix
++++ b/lib/default.nix
+@@ -136,7 +136,7 @@ let
+       pushDownProperties dischargeProperties filterOverrides
+       sortProperties fixupOptionType mkIf mkAssert mkMerge mkOverride
+       mkOptionDefault mkDefault mkImageMediaOverride mkForce mkVMOverride
+-      mkFixStrictness mkOrder mkBefore mkAfter mkAliasDefinitions
++      mkFixStrictness mkOrder mkBefore mkAfter mkApply mkAliasDefinitions
+       mkAliasAndWrapDefinitions fixMergeModules mkRemovedOptionModule
+       mkRenamedOptionModule mkRenamedOptionModuleWith
+       mkMergedOptionModule mkChangedOptionModule
+diff --git a/lib/modules.nix b/lib/modules.nix
+index b9e9ca1e5d78..de020fe01a1c 100644
+--- a/lib/modules.nix
++++ b/lib/modules.nix
+@@ -850,12 +850,18 @@ let
+         values = defs''';
+         inherit (defs'') highestPrio;
+       };
+-    defsFinal = defsFinal'.values;
++    defsFinal = filter (def: def.value._type or "" != "apply") defsFinal'.values;
+ 
+     # Type-check the remaining definitions, and merge them. Or throw if no definitions.
+-    mergedValue =
+-      if isDefined then
+-        if all (def: type.check def.value) defsFinal then type.merge loc defsFinal
++    mergedValue = let
++      merged = type.merge loc (foldl' (defs: def: (
++        # on each "apply", merge the previous defs and continue with the applied value
++        if def.value._type or "" != "apply" then defs ++ [ def ]
++        else if defs == [ ] then [ ] # ignore mapper if all values are explicitly ordered after it (see sortProperties)
++        else [ (def // { value = def.value.mapper (type.merge loc defs); }) ]
++      )) [ ] defsFinal'.values);
++    in if isDefined then
++        if all (def: type.check def.value) defsFinal then merged
+         else let allInvalid = filter (def: ! type.check def.value) defsFinal;
+         in throw "A definition for option `${showOption loc}' is not of type `${type.description}'. Definition values:${showDefs allInvalid}"
+       else
+@@ -960,7 +966,10 @@ let
+         then def // { value = def.value.content; inherit (def.value) priority; }
+         else def;
+       defs' = map strip defs;
+-      compare = a: b: (a.priority or defaultOrderPriority) < (b.priority or defaultOrderPriority);
++      compare = a: b: let
++        a' = a.priority or defaultOrderPriority;
++        b' = b.priority or defaultOrderPriority;
++      in a' < b' || (a' == b' && (b.value._type or "" == "apply" && a.value._type or "" == "apply"));
+     in sort compare defs';
+ 
+   # This calls substSubModules, whose entire purpose is only to ensure that
+@@ -1048,6 +1057,11 @@ let
+   defaultOrderPriority = 1000;
+   mkAfter = mkOrder 1500;
+ 
++  mkApply = mapper:
++    { _type = "apply";
++      inherit mapper;
++    };
++
+   # Convenient property used to transfer all definitions and their
+   # properties from one option to another. This property is useful for
+   # renaming options, and also for including properties from another module
+@@ -1427,6 +1441,7 @@ private //
+     mkAliasIfDef
+     mkAliasOptionModule
+     mkAliasOptionModuleMD
++    mkApply
+     mkAssert
+     mkBefore
+     mkChangedOptionModule

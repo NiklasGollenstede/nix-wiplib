@@ -41,7 +41,7 @@ ssh -q -t "$targetHost" -- "$( function remote { set -o pipefail -u
     else
         systemPath=$( nix --extra-experimental-features nix-command build --no-link --print-out-paths "$drvPath"$output "$@" ) || return
     fi
-    sudo= ; if [[ ${UID:-0} != 0 ]] ; then sudo=sudo ; fi
+    sudo= ; if [[ ${UID:-0} != "$( stat -c %u /nix 2>/dev/null || echo 0 )" ]] ; then sudo=sudo ; fi
     $sudo nix-env -p /nix/var/nix/profiles/system --set "$systemPath" || return
     if [[ $predicate == activate ]] ; then
         $sudo "$systemPath"/activate || return

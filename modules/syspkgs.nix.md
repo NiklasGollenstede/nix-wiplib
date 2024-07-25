@@ -102,6 +102,7 @@ in {
             "nixos-config=/etc/nixos/configuration.nix"
             "/nix/var/nix/profiles/per-user/root/channels"
         ]);
+        nixpkgs.flake.source = lib.mkForce null;
 
         system.extraDependencies = let # Make sure to also depend on nested inputs, to ensure they are already available in the host's nix store (in case the source identifiers don't resolve in the context of the host).
             getInputs = flake: [ flake ] ++ (map getInputs (lib.attrValues (flake.inputs or { })));

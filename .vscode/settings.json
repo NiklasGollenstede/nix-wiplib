@@ -7,6 +7,8 @@
 	"cSpell.diagnosticLevel": "Information", // to find spelling mistakes
 	"cSpell.words": [
 		"aarch64", // processor architecture
+		"acpi", // hardware
+		"alsamixer", // program
 		"argstr", // nix
 		"attrset", "attrsets", // nix/abbr (attribute set)
 		"autoexpand", // zfs option
@@ -19,16 +21,21 @@
 		"bootloader", // word
 		"bootpart", // abbr (boot partition)
 		"builtins", // nix
+		"bwrap", // program
 		"cdetect", // abbr
+		"clevo", // name
 		"cmds", // abbr (commands)
 		"concat", // abbr
 		"conv", // dd option
 		"coreutils", // package
+		"cppflags", // option
 		"CWD", // abbr
 		"cykerway", // name
 		"datadir", // abbr
+		"dbus", // linux
 		"debian", // name
 		"defexpr", // nix
+		"devtmpfs", // linux
 		"dontUnpack", // nixos
 		"dropbear", // program
 		"dtoverlay", // option
@@ -36,7 +43,9 @@
 		"eeprom", // abbr
 		"enableRedistributableFirmware", // nixpkgs
 		"expandsz", // zfs property
+		"extglob", // option
 		"extlinux", // program
+		"fanspeed", // concat
 		"fetchurl", // nix function
 		"filesystems", // plural
 		"firejail", // program
@@ -47,6 +56,7 @@
 		"fuser", // optoin
 		"fw_printenv", // program
 		"fw_setenv", // program
+		"gcroots", // nix
 		"genkeytypes", // concat
 		"getent", // program / function
 		"getsize64", // cli arg
@@ -54,6 +64,7 @@
 		"github", // name
 		"gnugrep", // package
 		"gnused", // package
+		"gnustep", // package
 		"gollenstede", // name
 		"gpio", // abbr (general purpose IO)
 		"gptfdisk", // package
@@ -67,13 +78,18 @@
 		"inodes", // plural
 		"ints", // plural
 		"journalctl", // program
+		"KenjiTakahashi", // name
 		"keygen", // program
+		"lcurses", "lncurses", // option
 		"leds", // plural
 		"libblockdev", // package
 		"libexec", // linux
+		"libobjc", // package
+		"libpulseaudio", // package
 		"libraspberrypi", // program
 		"libubootenv", // package
 		"libyaml", // package
+		"linux", // name
 		"logind", // program
 		"luks", // linux
 		"mkdir", // program / function
@@ -97,11 +113,13 @@
 		"nosuid", // mount option
 		"notrunc", // dd option
 		"ntfs", // filesystem
+		"objc", // abbr
 		"ondemand", // concat
 		"oneshot", // systemd
 		"openssh", // package
 		"optimise", // B/E
 		"overridable", // word
+		"pacmixer", // program
 		"partlabel", // linux
 		"partprobe", // program / function
 		"passthru", // nix
@@ -113,9 +131,12 @@
 		"postgresql", // program
 		"poweroff", // program / function
 		"poweron", // concat
+		"powersave", // linux
 		"psqlSchema", // abbr
+		"pulsemixer", // program
 		"pwauth", // abbr (password authentication)
 		"raidz", // zfs
+		"ramfs", // linux
 		"raspberrypi", // abbr
 		"raspberrypifw", // package
 		"rbind", // linux
@@ -136,6 +157,7 @@
 		"sendoptions", // zfs: syncoid
 		"sgdisk", // program
 		"sgid", // linux
+		"shopt", // option
 		"specialfs", // nix
 		"stdenv", // nix
 		"stty", // program / function
@@ -146,6 +168,7 @@
 		"syslinux", // package
 		"syspkgs", // abbr (system packages)
 		"sysrq", // linux
+		"tccd", // program
 		"temproot", // abbr (temporary root (FS))
 		"timefmt", // option
 		"tmpdir", // program
@@ -161,6 +184,7 @@
 		"unalias", // bash
 		"unallow", // zfs
 		"unbootable", // word
+		"uniwill", // hardware
 		"unmanaged", // word
 		"urandom", // linux
 		"usbhid", // kmod
@@ -169,6 +193,7 @@
 		"vfat", // linux
 		"virtualisation", // british english
 		"wiplib", // name / abbr (WIP library)
+		"ycbcr", // hardware
 		"zstd", "zstdcat", // program / function
 	],
 }

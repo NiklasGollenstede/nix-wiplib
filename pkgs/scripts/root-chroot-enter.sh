@@ -1,14 +1,16 @@
-#!/bin/sh
+set -o pipefail -u
 
 ## Called as root, this sets up »/run/nixos-root« as a NixOS environment according to »/nix/var/nix/profiles/system« and then »chroot«s into that system/env executing »"$@"«.
-#  To do this as a different user: $ sudo ${root-chroot-enter} /run/current-system/sw/bin/su - $USER -s /run/current-system/sw/bin/bash ${COMMANDS:+-c "$COMMANDS"}
+#  To do this as a different user: $ sudo ${root-chroot-enter} /run/current-system/sw/bin/su - $USER [-s ...] ${COMMANDS:+-c "$COMMANDS"}
+
+# /nix exists on the host, so nix packages (@{pkgs...) are available before entering the chroot.
 
 root=/run/nixos-root
 system=$( @{pkgs.coreutils}/bin/readlink -m /nix/var/nix/profiles/system )
 unset LANGUAGE LANG
 
 doActivate= ; if ! test -e $root/activated ; then doActivate=1 ; fi
-if test $doActivate ; then mountError= ; (
+mountError= ; if test $doActivate ; then (
     if [ -e $root ] ; then
         ! @{pkgs.util-linux}/bin/mountpoint -q $root || @{pkgs.util-linux}/bin/umount --recursive $root || exit
         @{pkgs.coreutils}/bin/rmdir $root || exit
