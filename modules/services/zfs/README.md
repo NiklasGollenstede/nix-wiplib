@@ -72,7 +72,7 @@ TODO (both concept and implementation)
 
 ## Example Host Config
 
-A full, multi-host example with forwarding can be found in [`hosts/zfs-backup.nix.md`](../../../hosts/zfs-backup.nix.md).
+A full, multi-host example with forwarding can be found in [`example/hosts/zfs-backup.nix.md`](../../../example/hosts/zfs-backup.nix.md).
 
 Here is a short example with a single source and two direct sinks:
 ```nix

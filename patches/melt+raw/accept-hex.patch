@@ -1,0 +1,28 @@
+diff --git a/melt.go b/melt.go
+index 8942ab1..895d23c 100644
+--- a/melt.go
++++ b/melt.go
+@@ -6,7 +6,7 @@ package melt
+ import (
+ 	"crypto/ed25519"
+ 	"fmt"
+-
++	"encoding/hex"
+ 	"github.com/tyler-smith/go-bip39"
+ )
+ 
+@@ -27,7 +27,13 @@ func toMnemonic(seed []byte) (string, error) {
+ // FromMnemonic takes a mnemonic list of words and returns an ed25519
+ // private key.
+ func FromMnemonic(mnemonic string) (ed25519.PrivateKey, error) {
+-	seed, err := bip39.EntropyFromMnemonic(mnemonic)
++	var seed []byte ; var err error = nil
++	if len(mnemonic) == 64 {
++		seed, err = hex.DecodeString(mnemonic)
++	}
++	if len(seed) != 32 || err != nil {
++		seed, err = bip39.EntropyFromMnemonic(mnemonic)
++	}
+ 	if err != nil {
+ 		return nil, fmt.Errorf("failed to get seed from mnemonic: %w", err)
+ 	}

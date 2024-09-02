@@ -22,7 +22,7 @@ in {
     # e.g.: add a prebuilt program as package
     qemu-aarch64-static = pkgs.stdenv.mkDerivation {
         name = "qemu-aarch64-static";
-        src = builtins.fetchurl {
+        src = pkgs.fetchurl {
             url = "https://github.com/multiarch/qemu-user-static/releases/download/v6.1.0-8/qemu-aarch64-static";
             sha256 = "075l122p3qfq6nm07qzvwspmsrslvrghar7i5advj945lz1fm6dd";
         }; dontUnpack = true;

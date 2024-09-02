@@ -9,16 +9,30 @@
     nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; };
     functions = { url = "github:NiklasGollenstede/nix-functions"; inputs.nixpkgs.follows = "nixpkgs"; };
     installer = { url = "github:NiklasGollenstede/nixos-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.functions.follows = "functions"; };
+    agenix = { url = "github:ryantm/agenix"; inputs.nixpkgs.follows = "nixpkgs"; inputs.home-manager.follows = "nixpkgs"; inputs.darwin.follows = "nixpkgs"; };
     systems.url = "github:nix-systems/default";
     config.url = "github:NiklasGollenstede/nix-wiplib?dir=example/defaultConfig"; # "path:./example/defaultConfig"; # (The latter only works on each host after using this flake directly (not as dependency or another flake). The former effectively points to the last commit, i.e. it takes two commits to apply changes to the default config.)
 
 }; outputs = inputs@{ self, ... }: inputs.functions.lib.importRepo inputs ./. (repo@{ overlays, ... }: let
     lib = repo.lib.__internal__;
-in [ # Run »nix flake show --allow-import-from-derivation« to see what this merges to:
-    repo # lib.* nixosModules.* overlays.* (legacy)packages.*.* patches.*
+in [ # Run »nix flake show« to see what this merges to:
 
-    (lib.inst.mkSystemsFlake { inherit inputs; asDefaultPackage = true; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems
+
+    ## Exports
+
+    repo # lib.* nixosModules.* overlays.* (legacy)packages.*.* patches.*
     { templates.default = { path = "${self}/example/template"; description = "NixOS host(s) configuration"; }; }
+
+
+    ## Examples:
+
+    (lib.inst.mkSystemsFlake { inherit inputs; hosts.dir = "${self}/example/hosts"; asDefaultPackage = true; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems/.default
+
+    (lib.wip.mkSecretsApp {
+        inherit inputs; secretsDir = "example/secrets";
+        adminPubKeys = { "${builtins.readFile ./example/ssh-dummy-key.pub}" = ".*"; };
+        getPrivateKeyPath = pkgs: "echo ${self}/example/ssh-dummy-key"; # Don't try this at home!
+    })
 
     (lib.fun.forEachSystem (import inputs.systems) (localSystem: let
         pkgs = lib.fun.importPkgs inputs { system = localSystem; };
@@ -26,4 +40,5 @@ in [ # Run »nix flake show --allow-import-from-derivation« to see what this me
         inherit pkgs inputs; name = "builder"; serverType = lib.wip.vps-worker.serverTypes.cax11;
         debug = true; ignoreKill = true;
     }).shell; }))
+
 ]); }

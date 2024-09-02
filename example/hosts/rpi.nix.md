@@ -16,9 +16,11 @@ Then connect `$DISK` to a PI, boot it, and (not much, because nothing is install
 ```nix
 #*/# end of MarkDown, beginning of NixOS config flake input:
 dirname: inputs: { config, pkgs, lib, name, ... }: let lib = inputs.self.lib.__internal__; in let
+in { preface = {
+    #instances = [ "rpi" ];
 
 
-in { imports = [ ({ ## Hardware
+}; imports = [ ({ ## Hardware
 
     nixpkgs.hostPlatform = "aarch64-linux"; system.stateVersion = "23.11";
     wip.hardware.raspberry-pi.enable = true;
@@ -34,18 +36,29 @@ in { imports = [ ({ ## Hardware
     setup.temproot.remote.type = "none";
 
 
-}) ({ ## Software
+}) ({ ## Base Config
 
+    # Some base config:
     wip.base.enable = true;
+    documentation.enable = false; # sometimes takes quite long to build
+    boot.kernelParams = [ "console=ttyS0" ]; # Only during local testing.
+    wip.services.secrets = {
+        enable = true; secretsDir = "example/secrets";
+        include = [ "shadow/.*" ]; # secrets that this host needs access to
+        rootKeyEncrypted = "ssh/host/host@${name}"; # (backup of) the host's decryption key, for (re-)installations
+    };
+
+
+}) ({ ## Actual Config
 
     environment.systemPackages = [ pkgs.curl pkgs.htop pkgs.tree ];
 
-    services.getty.autologinUser = "root"; users.users.root.password = "root";
+    services.getty.autologinUser = "root"; users.users.root.hashedPasswordFile = config.age.secrets."shadow/${"root"}".path; # »toor«
 
     boot.kernelParams = [ "boot.shell_on_fail" ]; wip.base.panic_on_fail = false;
 
     wip.services.dropbear.enable = true;
-    wip.services.dropbear.rootKeys = ''${lib.readFile "${dirname}/../example/ssh-login.pub"}'';
+    wip.services.dropbear.rootKeys = ''${lib.readFile "${inputs.self}/example/ssh-dummy-key.pub"}'';
     wip.services.dropbear.socketActivation = true;
 
     boot.binfmt.emulatedSystems = [ "x86_64-linux" ];

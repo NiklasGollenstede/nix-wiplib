@@ -62,8 +62,13 @@ in {
         ''; # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)
 
         system.activationScripts.diff-systems = lib.mkIf cfg.showDiffOnActivation { text = ''
-            if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix && $(realpath /run/current-system) != "$systemConfig" ]] ; then $systemConfig/sw/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig" ; fi
+            if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix && $(realpath /run/current-system) != "$systemConfig" ]] ; then
+                ${pkgs.nvd}/bin/nvd --nix-bin-dir=$systemConfig/sw/bin diff /run/current-system "$systemConfig"
+                #$systemConfig/sw/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig"
+            fi
         ''; deps = [ "etc" ]; };
+
+        environment.ldso32 = null; # Don't install the /lib/ld-linux.so.2 stub. This saves one instance of nixpkgs.
 
         virtualisation = lib.fun.mapMerge (vm: { ${vm} = let
             config' = config.virtualisation.${vm};

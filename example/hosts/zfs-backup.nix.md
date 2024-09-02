@@ -1,17 +1,18 @@
 /*
 
-# Example Multi-level [ZFS Backup](../modules/services/zfs/)
+# Example Multi-level [ZFS Backup](../../modules/services/zfs/)
 
 This sets up two data-producing "clients" (`server` and `laptop`) that send their backups to a `relay` which stores their backups at the main site, but also forwards the received backups to two off-site backup sinks (`sink1`/`sink2`).
 
 To start the VMs, run in `..`:
 ```bash
- nix shell nixpkgs#vde2 --command vde_switch -sock /tmp/nixos-vm/zfs-net
- nix run .#zfs-relay  -- run-qemu --install=always --nic=vde,sock=/tmp/nixos-vm/zfs-net
- nix run .#zfs-server -- run-qemu --install=always --nic=vde,sock=/tmp/nixos-vm/zfs-net
- nix run .#zfs-laptop -- run-qemu --install=always --nic=vde,sock=/tmp/nixos-vm/zfs-net
- nix run .#zfs-sink1  -- run-qemu --install=always --nic=vde,sock=/tmp/nixos-vm/zfs-net
- nix run .#zfs-sink2  -- run-qemu --install=always --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ mkdir -p /tmp/nixos-vm ; nix shell nixpkgs#vde2 --command vde_switch -sock /tmp/nixos-vm/zfs-net
+ nix run .#zfs-server -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-laptop -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-relay  -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-sink1  -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-sink2  -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ rm -rf /tmp/nixos-vm/zfs-* # cleanup
 ```
 
 To see the interesting part of the configuration, skip to `## Backups` below.
@@ -22,13 +23,11 @@ To see the interesting part of the configuration, skip to `## Backups` below.
 ```nix
 #*/# end of MarkDown, beginning of NixOS config flake input:
 dirname: inputs: { config, pkgs, lib, name, ... }: let lib = inputs.self.lib.__internal__; in let
-    rpoolOf = name: "rpool-${builtins.substring 0 8 (builtins.hashString "sha256" name)}";
-    rpool = rpoolOf name;
-    uidOf = name: (lib.fun.indexOf instances name) + 401;
-    instances = [ "zfs-relay" "zfs-server" "zfs-laptop" "zfs-sink1" "zfs-sink2" ];
+    rpool = rpoolOf name; rpoolOf = name: "rpool-${builtins.substring 0 8 (builtins.hashString "sha256" name)}";
+    id = idOf name; idOf = name: (lib.fun.indexOf instances name) + 1; uidOf = name: (idOf name) + 400;
+    instances = [ "zfs-server" "zfs-laptop" "zfs-relay" "zfs-sink1" "zfs-sink2" ];
 in { preface = {
-    inherit instances;
-    id = (lib.fun.indexOf instances name) + 1;
+    inherit instances id;
 
 
 }; imports = [ ({ ## Hardware
@@ -41,7 +40,7 @@ in { preface = {
     setup.keystore.enable = true;
 
     networking.interfaces.ens4.ipv4.addresses = [ { address = "10.0.4.${config.preface.id}"; prefixLength = 24; } ];
-    networking.hosts = lib.fun.mapMerge (name: { "10.0.4.${toString ((lib.fun.indexOf instances name) + 1)}" = [ name ]; }) instances;
+    networking.hosts = lib.fun.mapMergeUnique (name: { "10.0.4.${toString (idOf name)}" = [ name ]; }) instances;
 
 
 }) ({ ## Base Config
@@ -51,6 +50,11 @@ in { preface = {
     documentation.enable = false; # sometimes takes quite long to build
     boot.kernelParams = [ "console=ttyS0" ];
     services.getty.autologinUser = "root"; users.users.root.password = "root";
+    wip.services.secrets = {
+        enable = true; secretsDir = "example/secrets";
+        include = [ "ssh/service/backup@${name}" ]; # secrets that this host needs access to
+        rootKeyEncrypted = "ssh/host/host@${name}"; # (backup of) the host's decryption key, for (re-)installations
+    };
 
 
 }) ({ ## Backups
@@ -115,11 +119,11 @@ in { preface = {
 }) ({ ### Backup Commons
 
     services.openssh.enable = true;
-    wip.services.zfs.receive.getSshKey = host: lib.fileContents ../example/ssh-dummy-key.pub;
-    services.syncoid.sshKey = ../example/ssh-dummy-key;
+    wip.services.zfs.receive.getSshKey = host: lib.fileContents "${config.wip.services.secrets.secretsPath}/ssh/service/backup@${host}.pub";
+    services.syncoid.sshKey = config.age.secrets."ssh/service/backup@${name}".path;
+    age.secrets."ssh/service/backup@${name}" = { mode = "440"; group = "backup"; };
 
-    services.openssh.knownHosts = lib.fun.mapMerge (name: { ${name}.publicKeyFile = ../example/ssh-dummy-key.pub; }) instances;
-    environment.etc."ssh/ssh_host_ed25519_key" = { source = lib.mkForce ../example/ssh-dummy-key; mode = "0400"; };
+    services.openssh.knownHosts = lib.fun.mapMerge (name: { ${name}.publicKeyFile = "${config.wip.services.secrets.secretsPath}/ssh/host/host@${name}.pub"; }) instances;
 
     services.sanoid.templates.production = {
         autoprune  = true; autosnap   = true;
@@ -139,7 +143,7 @@ in { preface = {
     disabledModules = [ "services/backup/syncoid.nix" ];
     imports = [ "${((import inputs.nixpkgs { system = "x86_64-linux"; }).applyPatches {
         name = "nixpkgs-patched"; src = "";
-        patches = [ ../patches/nixpkgs/syncoid-user-per-cmd.patch ];
+        patches = [ ../../patches/nixpkgs/syncoid-user-per-cmd.patch ];
     }).overrideAttrs {
         unpackPhase = ''
             mkdir -p nixos/modules/services/backup

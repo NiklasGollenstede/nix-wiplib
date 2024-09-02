@@ -23,8 +23,8 @@ in { preface = {
 }; imports = [ ({ ## Hardware
 
     nixpkgs.hostPlatform = if name == "vps" then "x86_64-linux" else "aarch64-linux"; system.stateVersion = "23.11";
-
     wip.hardware.hetzner-vps.enable = true;
+
     setup.temproot.enable = true;
     setup.temproot.temp.type = "zfs";
     setup.temproot.local.type = "zfs";
@@ -37,6 +37,11 @@ in { preface = {
     wip.base.enable = true;
     documentation.enable = false; # sometimes takes quite long to build
     boot.kernelParams = [ "console=ttyS0" ]; # Only during local testing.
+    wip.services.secrets = {
+        enable = true; secretsDir = "example/secrets";
+        include = [ "shadow/.*" ]; # secrets that this host needs access to
+        rootKeyEncrypted = "ssh/host/host@${name}"; # (backup of) the host's decryption key, for (re-)installations
+    };
 
 
 }) ({ ## Actual Config
@@ -45,10 +50,11 @@ in { preface = {
 
     environment.systemPackages = [ pkgs.curl pkgs.htop pkgs.tree ];
 
-    services.getty.autologinUser = "root"; users.users.root.password = "root";
+    services.getty.autologinUser = "root"; users.users.root.hashedPasswordFile = config.age.secrets."shadow/${"root"}".path; # »toor«
 
     boot.kernelParams = [ "boot.shell_on_fail" ]; wip.base.panic_on_fail = false;
 
-    boot.zfs.allowHibernation = lib.mkForce false; # Ugh: https://github.com/NixOS/nixpkgs/commit/c70f0473153c63ad1cf6fbea19f290db6b15291f
+    wip.services.dropbear.enable = true; # root:toor
+    #services.openssh.enable = true; # (needs extra config to allow root password login)
 
 }) ]; }

@@ -56,6 +56,7 @@ if [[ ${args[register]:-} ]] ; then
 
     ssh -q -t "${argv[0]:?}" -- "$( function remote { set -o pipefail -u
         jq=$1 ; shift ; path=$1 ; shift ; name=$1 ; shift ; args=( --arg path "$path" --arg name "$name" )
+        if ! $jq --version &>/dev/null ; then jq=$( nix --extra-experimental-features 'nix-command flakes' build nixpkgs#jq^bin --no-link --print-out-paths )/bin/jq ; fi # fallback for e.g. cross-arch
         if [[ -e .config/nix/registry.json ]] ; then reg=$(<.config/nix/registry.json) ; else reg='{ "version": 2, "flakes": [ ] }' ; fi
         isVer=$( <<<$reg $jq .version ) ; if [[ $isVer != 2 ]] ; then echo "Unexpected flake registry's version ${isVer:-(empty)}" ; exit 2 ; fi
 

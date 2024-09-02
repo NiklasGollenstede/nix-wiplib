@@ -7,7 +7,7 @@ The sending host/user does not require destructive ZFS permissions on the target
 See [the README](./README.md) for motivation and concepts.
 
 **NOTICE**: (If any dataset targets are defined, then) this module currently requires `config.services.syncoid.sshKey` to be set and the [`nixpkgs-syncoid-user-per-cmd`](../../../patches/nixpkgs/syncoid-user-per-cmd.patch) patch to be applied to `nixpkgs`.
-See at the bottom of [`hosts/zfs-backup.nix.md`](../../../hosts/zfs-backup.nix.md) for an example how to do this (without patching all of `nixpkgs`).
+See at the bottom of [`example/hosts/zfs-backup.nix.md`](../../../example/hosts/zfs-backup.nix.md) for an example how to do this (without patching all of `nixpkgs`).
 
 
 ## Implementation

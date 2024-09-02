@@ -8,11 +8,14 @@
 	"cSpell.words": [
 		"aarch64", // processor architecture
 		"acpi", // hardware
+		"agenix", // program
 		"alsamixer", // program
 		"argstr", // nix
 		"attrset", "attrsets", // nix/abbr (attribute set)
 		"autoexpand", // zfs option
 		"autologin", // agetty
+		"autoprune", // ZFS
+		"autosnap", // ZFS
 		"bindir", // abbr
 		"binfmt", // abbr "binary format"
 		"blkdiscard", // program
@@ -31,6 +34,7 @@
 		"cppflags", // option
 		"CWD", // abbr
 		"cykerway", // name
+		"darwin", // name
 		"datadir", // abbr
 		"dbus", // linux
 		"debian", // name
@@ -40,7 +44,9 @@
 		"dropbear", // program
 		"dtoverlay", // option
 		"dtparam", // option
+		"ectory", // "dir"ectory
 		"eeprom", // abbr
+		"elif", // bash
 		"enableRedistributableFirmware", // nixpkgs
 		"expandsz", // zfs property
 		"extglob", // option
@@ -57,6 +63,7 @@
 		"fw_printenv", // program
 		"fw_setenv", // program
 		"gcroots", // nix
+		"genkey", // abbr (generate key)
 		"genkeytypes", // concat
 		"getent", // program / function
 		"getsize64", // cli arg
@@ -94,6 +101,7 @@
 		"luks", // linux
 		"mkdir", // program / function
 		"mkenvimage", // program
+		"mkpasswd", // program
 		"mktemp", // program / function
 		"mountpoint", // program / function
 		"mtab", // linux
@@ -133,6 +141,7 @@
 		"poweron", // concat
 		"powersave", // linux
 		"psqlSchema", // abbr
+		"pubkey", // abbr (public key)
 		"pulsemixer", // program
 		"pwauth", // abbr (password authentication)
 		"raidz", // zfs
@@ -152,6 +161,7 @@
 		"rpool", // zfs
 		"rprivate", // linux
 		"rtkit", // program
+		"ryantm", // name
 		"sanoid", // program
 		"sbabic", // name
 		"sendoptions", // zfs: syncoid
@@ -174,6 +184,7 @@
 		"tmpdir", // program
 		"tmpfiles", // nixos option
 		"tmpfs", // linux
+		"toor", // "root" in reverse
 		"toplevel", // nix
 		"typecode", // cli arg
 		"uart", "uarts", // serial protocol
