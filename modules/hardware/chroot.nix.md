@@ -231,7 +231,7 @@ in ({
 }) (let ## Entering
     nixDir = if cfg.userMode.nixDir != null then cfg.userMode.nixDir else "${cfg.homesDir}/${user.name}/.nix";
     ssh-enter = if cfg.mode == "root" then "/nix/var/nix/profiles/system/ssh-enter" else "${nixDir}/$( system=$( readlink -m ${nixDir}/var/nix/profiles/system ) ; echo \${system#/nix/} )/ssh-enter"; # Use indirection, because SSHd only reads the config files on new (master) connections, but changes to this script should apply to new sessions as soon as the system got rebuilt.
-    command = "enter=${ssh-enter} ; ${if cfg.ssh-enter.opportunistic then ''if test -e $enter ; then NIXOS_CHROOT_SSH_ENTER_OPPORTUNISTIC=1 $enter ; else "$SHELL" ''${SSH_ORIGINAL_COMMAND:+-c "$SSH_ORIGINAL_COMMAND"} ; fi'' else "exec $enter"}";
+    command = "enter=${ssh-enter} ; ${if cfg.ssh-enter.opportunistic then ''if test -e $enter ; then NIXOS_CHROOT_SSH_ENTER_OPPORTUNISTIC=1 exec $enter ; else "$SHELL" ''${SSH_ORIGINAL_COMMAND:+-c "$SSH_ORIGINAL_COMMAND"} ; fi'' else "exec $enter"}";
     users = builtins.filter (_:_.isNormalUser) (builtins.attrValues config.users.users); user = builtins.head users;
     keys = user: user.openssh.authorizedKeys.keys ++ builtins.concatLists (map (file: lib.splitString "\n" (lib.fileContents file)) user.openssh.authorizedKeys.keyFiles);
 in {

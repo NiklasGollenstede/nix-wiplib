@@ -29,7 +29,7 @@ function restore-zfs-backups {
         if [[ ${args[zfs-restore-local]:-} ]] ; then source=${source##*:} ; fi
         if [[ ! $source ]] ; then echo "No available restore source for dataset $dataset available from host ${args[zfs-restore-host]:-<any>}" ; fi
 
-        restore-zfs-dataset "$source" "$dataset" ${noSnap:+--no-sync-snap} $syncoidOptions
+        restore-zfs-dataset "$source" "$dataset" ${noSnap:+--no-sync-snap} --sendoptions='w' --recvoptions='u' $syncoidOptions
     done
 }
 
@@ -38,7 +38,7 @@ Syncs the ZFS dataset »source« to the target »dataset«, and (assuming »data
 EOD
 function restore-zfs-dataset { # 1: source, 2: dataset, ...: syncoidOptions
     local source=$1 dataset=$2 ; shift ; shift # (Do not change these names, they may be used in the »postRestoreCommands«.)
-    local syncoid=( syncoid --no-privilege-elevation --recursive --sendoptions='w' --recvoptions='u' --compress=none "$@" "$source" "$dataset" )
+    local syncoid=( syncoid --no-privilege-elevation --recursive --compress=none "$@" "$source" "$dataset" )
 
     echo "Restoring $dataset from $source with command:"
     ( set -x ; : "${syncoid[@]}" )

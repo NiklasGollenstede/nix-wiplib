@@ -40,6 +40,38 @@ The modules are inactive by default, and are, where possible, designed to be ind
 [`example/`](./example/) currently only contains this flake's [default config](./example/defaultConfig/) (see [Namespacing](#namespacing-in-nixos)).
 
 
+## `secrets` Module & App
+
+The `secrets` module and app are (currently) a slim wrapper around `agenix`. It's main advantage is that it requires no central list assigning secrets.
+
+Merge this into your flakes outputs:
+```nix
+    (inputs.wiplib.lib.mkSecretsApp {
+        inherit inputs; adminPubKeys = { "${builtins.readFile ./...pub}" = ".*"; }; # ...
+    })
+```
+And add something like this to your hosts' definitions:
+```nix
+{   wip.services.secrets = {
+        enable = true; rootKeyEncrypted = "ssh/host/host@${name}";
+        include = [ "shadow/.*" ]; # secrets (regex matching path) that this host needs access to
+    };
+    users.users.root.hashedPasswordFile = config.age.secrets."shadow/${"root"}".path; # use runtime-decrypted secret
+```
+Then generate the master keys (SSH host keys) for each host:
+```bash
+for host in ... ; do nix run .#secrets -- -s ssh/host/host@$host ; done
+```
+And generate the actual secrets you want:
+```bash
+nix run .#secrets -- -p shadow/root # prompts for and then hashes and encrypts a password (mkpasswd)
+nix run .#secrets -- -s ssh/service/$remoteUser@$thisHost # generates an SSH key pair, encrypting the private key and keeping the .pub
+nix run .#secrets -- -w wg/wgX@$thisHost # generates a WireGuard key pair, encrypting the private key and keeping the .pub
+nix run .#secrets -- -e ... # opens an editor to create a new or edit an existing secret
+nix run .#secrets -- -r # re-encrypts each secret to be available for (decryption with the keys of) all hosts that »include« them
+```
+
+
 ## Namespacing in NixOS
 
 One of the weak points of NixOS is namespacing. NixOS is traditionally based on the `nixpkgs` monorepo.

@@ -49,7 +49,7 @@ if [[ ${args[register]:-} ]] ; then storePaths+=( @{pkgs.jq} ) ; fi
 
 PATH=@{pkgs.openssh}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:$PATH @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' copy --to "$targetStore" ${storePaths[@]} || exit
 # ¿¿Why does something there call »hostname -I«, which is apparently only available in the debian version of hostname??
-echo ${storePaths[0]}
+printf %s ${storePaths[0]}
 
 if [[ ${args[register]:-} ]] ; then
     if [[ ${args[register]:-} == 1 ]] ; then args[register]=$( basename "$( dirname "$flakeLock" )" ) ; fi
@@ -67,4 +67,8 @@ if [[ ${args[register]:-} ]] ; then
         fi
         mkdir -p .config/nix/ ; <<<$reg cat >.config/nix/registry.json
     } ; declare -f remote ) ; remote $( printf ' %q' @{pkgs.jq}/bin/jq "${storePaths[0]}" "${args[register]}" )" || exit
+
+    printf ' == %s' "${args[register]}"
 fi
+
+printf '\n'

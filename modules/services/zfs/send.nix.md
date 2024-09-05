@@ -86,7 +86,7 @@ in { imports = [ {
 
     } // (lib.optionalAttrs (options?installer) {
         ## Enable restoring of backups during installation:
-        installer.scripts.zfs-restore.path = ./utils/restore-zfs-backups.sh;
+        installer.scripts.zfs-restore = { path = ./utils/restore-zfs-backups.sh; order = 750; };
         installer.commands.postFormat = ''check-restore-zfs-backups --force-delete'';
 
     })) (let

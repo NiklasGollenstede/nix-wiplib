@@ -14,7 +14,7 @@ in {
         adminPubKeys, # `{ "ssh-ed25519 ..." = ".*" | ("secrets/<...>.age": true|false); }`: Mapping of admins' public (SSH/age) keys to secrets they can decrypt, as a regular expression or a predicate. Either is used as a filter of the paths of all `.age` files in `$secretsDir`.
         getPrivateKeyPath ? pkgs: ''echo "$HOME/.ssh/id_ed25519"'', # A bash script snippet that returns the path to the private key file/identity used to decrypt secrets (explicitly or when editing/rekeying existing secrets). Its public key should be in `adminPubKeys`.
         hostNeedsSecret ? hostName: { config, ... }: if config.wip.services.secrets.include == [ ] then path: false else lib.concatStringsSep "|" config.wip.services.secrets.include, # `...: ( "wg/.*@${hostName}|ssh/service/.*@${hostName}" | ("secrets/<...>.age": true|false) )`: Function of host to the secrets it can decrypt. The function arguments are the same as for `getHostPubKey`, and the matching logic is the same as for the values of `adminPubKeys`.
-        getHostPubKey ? hostName: { config, ... }: let path = "${inputs.self.outPath}/${secretsDir}/ssh/host/host@${hostName}.pub"; in if builtins.pathExists path then builtins.readFile path else null, # `...: "ssh-ed25519 ..."|null`: Function mapping hosts to their decryption key's public identity. The arguments are a key and corresponding value of `hosts`.
+        getHostPubKey ? hostName: { config, ... }: let path = "${inputs.self.outPath}/${secretsDir}/ssh/host/host@${hostName}.pub"; in if builtins.pathExists path then builtins.readFile path else null, # `...: "ssh-ed25519 ..."|null`: Function mapping hosts to their decryption key's public identity. The arguments are an attribute name and corresponding value of `hosts`.
         hosts ? inputs.self.nixosConfigurations, # Attribute set of NixOS configurations that need to access secrets.
         repoRoot ? inputs.self.outPath, # Path to the root of the flake/repository.
         secretsDir ? "secrets", # Relative path of the dir in `repoRoot` where secrets are stored.
@@ -53,6 +53,7 @@ in {
 
                     if [[ $genSSH || $genWG || $genPW ]] ; then
                         set -- --edit "''${@:2}"
+                        pubExisted= ; if [[ -e ''${2%.age}.pub ]] ; then pubExisted=1 ; fi
                         if [[ $genSSH ]] ; then
                             ${pkgs.openssh}/bin/ssh-keygen -q -N "" -t ed25519 -f "''${2%.age}" -C "" || exit
                             private=$( cat "''${2%.age}" ) && rm -f "''${2%.age}" || exit
@@ -62,6 +63,7 @@ in {
                         else
                             private=$( ${lib.getExe pkgs.mkpasswd} -m sha-512 ) || exit
                         fi
+                        if [[ ! $pubExisted && -e ''${2%.age}.pub ]] ; then git stage "''${2%.age}.pub" ; fi
                         <<<"$private" "''${agenix[@]}" "$@" || exit
                     exit ; fi
                 fi
@@ -73,5 +75,18 @@ in {
             "share/secrets-spec.json" = builtins.toJSON secrets;
         };
     }; asApps = true; }; };
+
+    # Usable as »mkSecretsApp«'s »getPrivateKeyPath« argument, this generates a admin private (and public) key from a seed that results from a fixed challenge to a YubiKey's HMAC function.
+    # The key pair can thus be re-generated with the same YubiKey (or the same HMAC secret), effectively making the YubiKey ('s HMAC secret) the actual key, and the generated key pair only a cache of the (derived) key.
+    # The default location of the cached key (»keyPath«) is in »/run/user/« and thus clears the cache on reboot or logout.
+    getPrivateKeyFromYubikeyChallenge = { challenge, slot ? "2", keyPath ? ''/run/user/"$UID"/"$challenge".key'', }: (pkgs: ''
+        challenge=${challenge} ; slot=${slot} ; keyPath=${keyPath} # not escaped on purpose, to allow for evil wizardry
+        if [[ ! -e $keyPath ]] ; then
+            echo 'Generating private get by challenging YubiKey (slot '"$slot"') with "'"$challenge"'"' >&2
+            seed=$( ${pkgs.yubikey-personalization}/bin/ykchalresp -"$slot" "$challenge" ) || exit
+            <<<"$seed" ${pkgs.coreutils}/bin/sha256sum - | ${pkgs.coreutils}/bin/head -c 64 | ${lib.getExe pkgs.melt-raw} restore "$keyPath" >&2 || exit
+            echo 'Public key: '"$( cat "$keyPath".pub )" >&2
+        fi ; echo "$keyPath"
+    '');
 
 }
