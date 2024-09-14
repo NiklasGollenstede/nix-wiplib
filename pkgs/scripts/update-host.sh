@@ -31,7 +31,7 @@ if [[ ! ${args[remote-eval]:-} ]] ; then
     drvPath=$( nix eval --extra-experimental-features 'nix-command flakes' --raw .#nixosConfigurations."$hostname".config.system.build.toplevel.drvPath "${argv[@]:2}" ) || exit
     nix --extra-experimental-features nix-command copy --to ssh://"$targetHost" --derivation "$drvPath^*" || exit
 else
-    drvPath=$( @{pkgs.push-flake!getExe} "$hostname" . )#nixosConfigurations."$hostname".config.system.build.toplevel || exit
+    drvPath=$( @{pkgs.push-flake!getExe} "$targetHost" . )#nixosConfigurations."$hostname".config.system.build.toplevel || exit
 fi
 
 ssh -q -t "$targetHost" -- "$( function remote { set -o pipefail -u

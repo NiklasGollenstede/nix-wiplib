@@ -4,14 +4,15 @@ Builds the current system's (single »partitionDuringInstallation«ed) disk imag
 Requires the »HCLOUD_TOKEN« environment variable to be set.
 EOD
 declare-flag deploy-system-to-hetzner-vps parallel-build-deploy '' "Start initializing the VPS while its image is still being built. This is faster, but the server will be billed for the first hour even if the image build fails."
-function deploy-system-to-hetzner-vps { # 1: name, 2: serverType
+function deploy-system-to-hetzner-vps {
+    local name=$1 serverType=$2 ; shift 2 || true
 
     if [[ ! ${args[quiet]:-} ]] ; then echo 'Building the worker image' ; fi
     local image ; image=$( mktemp -u ) && prepend_trap "rm -f '$image'" EXIT || return
-    local buildPid ; install-system "$image" & buildPid=$!
+    local buildPid ; args[no-inspect]=1 ; install-system "$image" & buildPid=$!
     if [[ ! ${args[parallel-build-deploy]:-} ]] ; then wait $buildPid || return ; fi
 
-    deploy-image-to-hetzner-vps "$1" "$2" "$image" ${args[parallel-build-deploy]:+"$buildPid"} || return
+    deploy-image-to-hetzner-vps "$name" "$serverType" "$image" "${args[parallel-build-deploy]:+"$buildPid"}" "$@" || return
 }
 
 declare-command deploy-image-to-hetzner-vps name serverType imagePath waitPid? << 'EOD'
@@ -21,7 +22,7 @@ EOD
 declare-flag deploy-image-to-hetzner-vps vps-keep-on-build-failure '' "Do not delete the VPS if the deployment fails. Useful only for debugging (and dangerous otherwise, because the server resource is simply being \"leaked\")."
 declare-flag deploy-image-to-hetzner-vps vps-suppress-create-email '' "Prevent hetzner from sending an email with a (useless) root password for the new server to the account owner by setting the server's »ssh-key« option to »dummy«. A key of that name has to exist in »HCLOUD_TOKEN«'s cloud project."
 function deploy-image-to-hetzner-vps { # 1: name, 2: serverType, 3: imagePath, 4?: waitPid
-    local name=$1 serverType=$2 imagePath=$3 waitPid=${4:-}
+    local name=$1 serverType=$2 imagePath=$3 waitPid=${4:-} ; shift 4 || true
     local stdout=/dev/stdout ; if [[ ${args[quiet]:-} ]] ; then stdout=/dev/null ; fi
 
     local work ; work=$( mktemp -d ) && prepend_trap "rm -rf $work" EXIT || return
@@ -45,10 +46,10 @@ ssh_keys:
     ed25519_private: |
 $( cat $work/host | @{native.perl}/bin/perl -pe 's/^/        /' )
 EOC
-    @{native.hcloud}/bin/hcloud server create --image=ubuntu-22.04 --name="$name" --type="$serverType" --user-data-from-file - ${args[vps-suppress-create-email]:+--ssh-key dummy} >$stdout || return
+    @{native.hcloud}/bin/hcloud server create --image=ubuntu-22.04 --name="$name" --type="$serverType" --user-data-from-file - ${args[vps-suppress-create-email]:+--ssh-key dummy} "$@" >$stdout || return
     # @{native.hcloud}/bin/hcloud server poweron "$name" || return # --start-after-create=false
 
-    local ip ; ip=$( @{native.hcloud}/bin/hcloud server ip "$name" ) && echo "$ip" >$work/ip || return
+    local ip ; ip=$( @{native.hcloud}/bin/hcloud server ip "$name" ) || ip=$( @{native.hcloud}/bin/hcloud server ip --ipv6 "$name" ) && echo "$ip" >$work/ip || return
     printf "%s %s\n" "$ip" "$( cat $work/host.pub )" >$work/known_hosts || return
     local sshCmd ; sshCmd="@{native.openssh}/bin/ssh -oUserKnownHostsFile=$work/known_hosts -i $work/login root@$ip"
 

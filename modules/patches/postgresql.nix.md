@@ -35,7 +35,7 @@ in {
             prevData=${esc cfg.prevDataDir}
             prevBin=${wrap cfg.prevPackage}/bin
 
-            if [[ ! -e $curData/base ]] ; then ( # (systemd may have created $curDir)
+            if [[ ! -e $curData/base ]] ; then ( # (systemd may have created $curData itself)
                 mkdir -p -m 700 "$curData" ; cd "$curData"
                 $curBin/initdb -D "$curData"
                 $curBin/pg_upgrade \

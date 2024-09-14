@@ -9,7 +9,7 @@ Things that really should be (more like) this by default.
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: moduleArgs@{ config, options, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
+dirname: inputs: moduleArgs@{ options, config, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer;
     cfg = config.${prefix}.base;
     outputName = config.${installer}.outputName;
@@ -42,6 +42,7 @@ in {
     in lib.mkIf cfg.enable (lib.mkMerge [ (
         lib.optionalAttrs (options.nix.channel?enable) { nix.channel.enable = lib.mkDefault false; }
     ) ({
+        boot.initrd.systemd.enable = lib.mkIf (!config.boot.isContainer) (lib.mkDefault true);
         users.mutableUsers = false; users.allowNoPasswordLogin = true; # Don't babysit. Can roll back or redeploy.
         networking.hostId = lib.mkDefault (builtins.substring 0 8 (builtins.hashString "sha256" config.networking.hostName));
         environment.etc."machine-id".text = lib.mkDefault (builtins.substring 0 32 (builtins.hashString "sha256" "${config.networking.hostName}:machine-id")); # this works, but it "should be considered "confidential", and must not be exposed in untrusted environments" (not sure _why_ though)
@@ -49,6 +50,7 @@ in {
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
         nix.settings.ignore-try = lib.mkDefault true; # Use »--option ignore-try false« on the CLI to revert this.
         nix.settings.flake-registry = lib.mkDefault ""; # Disable the global (online) flake registry.
+        nix.package = lib.mkIf (pkgs.nixVersions?nix_2_20 && lib.versionOlder pkgs.nix.version pkgs.nixVersions.nix_2_20.version) (lib.mkDefault pkgs.nixVersions.nix_2_20); # https://github.com/NixOS/nix/issues/10815
         #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
         boot.kernelParams = [ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail"); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails.
@@ -149,7 +151,8 @@ in {
             fi
             cd "$flakePath" || exit
 
-            nix --extra-experimental-features 'nix-command flakes' flake update ${/* lib.escapeShellArgs (not split properly) */ toString config.system.autoUpgrade.flags}
+            # This (implicitly passing »--flake« requires nix.version > 2.18)
+            nix --extra-experimental-features 'nix-command flakes' flake update ${/* lib.escapeShellArgs (defaults are not split properly) */ toString config.system.autoUpgrade.flags}
         ''; # (Since all inputs to the system flake are linked as system-level flake registry entries, even "indirect" references that don't really exist on the target can be "updated" (which keeps the same hash but changes the path to point directly to the nix store).)
 
         # TODO: reboots

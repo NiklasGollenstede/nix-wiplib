@@ -15,7 +15,7 @@ declare pkgs=( ) last= inline= list= ; while (( "$#" > 0 )) ; do {
     if [[ $1 == -l ]] ; then shift ; list=1 ; continue ; fi
     if [[ $1 == -- ]] ; then shift ; break ; fi
     if [[ $1 == -* ]] ; then echo "$help" >&2 ; return 1 ; fi
-    if [[ $1 == . ]] ; then shift ; set -- "${last##*#}" "$@" ; break ; fi
+    if [[ $1 == . ]] ; then shift ; last=${last##*#} ; last=${last##.#} set -- "$last" "$@" ; break ; fi
     last="$1" ; if [[ $1 != */* && $1 != *#* ]] ; then pkgs+=( flake:"$nixpkgs"'#'"$1" ) ; else pkgs+=( "$1" ) ; fi
 } ; shift ; done
 if (( ${#pkgs[@]} == 0 )) ; then echo "$help" 1>&2 ; return 1 ; fi

@@ -29,7 +29,7 @@ in {
             ls = "ls --color=auto"; # (default)
             l  = "ls -alhF"; # (added F)
             ll = "ls -alF"; # (added aF)
-            lt = "${lib.getExe pkgs.tree} -a -p -g -u -s -D -F --timefmt '%Y-%m-%d %H:%M:%S'"; # ll like tree
+            lt = "${lib.getExe pkgs.tree} -a -p -g -u -s -D -F --timefmt '%Y-%m-%d %H:%M:%S' -I '.git/|node_modules/'"; # ll like tree
             lp = pkgs.writeShellScript "lp" ''abs="$(cd "$(dirname "$1")" ; pwd)"/"$(basename "$1")" ; ${pkgs.util-linux}/bin/namei -lx "$abs"''; # similar to »ll -d« on all path element from »$1« to »/«
 
             # colorized listing of all interface's IPs
