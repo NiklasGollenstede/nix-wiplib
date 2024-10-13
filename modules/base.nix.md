@@ -132,7 +132,7 @@ in {
             allowReboot = lib.mkDefault false;
         };
 
-        systemd.services.nixos-upgrade.script = lib.mkBefore ''
+        systemd.services.nixos-upgrade.script = lib.mkMerge [ (lib.mkBefore ''
             # Make flakePath writable and a repo if necessary:
             flakePath=${lib.escapeShellArg config.environment.etc.nixos.source}
             if [[ -e $flakePath/flake.lock && ! -w $( realpath "$flakePath" )/flake.lock ]] ; then
@@ -151,9 +151,13 @@ in {
             fi
             cd "$flakePath" || exit
 
-            # This (implicitly passing »--flake« requires nix.version > 2.18)
-            nix --extra-experimental-features 'nix-command flakes' flake update ${/* lib.escapeShellArgs (defaults are not split properly) */ toString config.system.autoUpgrade.flags}
-        ''; # (Since all inputs to the system flake are linked as system-level flake registry entries, even "indirect" references that don't really exist on the target can be "updated" (which keeps the same hash but changes the path to point directly to the nix store).)
+            # This (implicitly passing »--flake«) requires nix.version > 2.18:
+            nix --extra-experimental-features 'nix-command flakes' flake update ${/* lib.escapeShellArgs (defaults are not split properly) */ toString config.system.autoUpgrade.flags} || failed=$?
+            # (Since all inputs to the system flake are linked as system-level flake registry entries, even "indirect" references that don't really exist on the target can be "updated" (which keeps the same hash but changes the path to point directly to the nix store).)
+            if [[ ''${failed:-} ]] ; then echo >&2 'Updating (some) inputs failed' ; fi
+        '') (lib.mkAfter ''
+            if [[ ''${failed:-} ]] ; then exit $failed ; fi
+        '') ];
 
         # TODO: reboots
 

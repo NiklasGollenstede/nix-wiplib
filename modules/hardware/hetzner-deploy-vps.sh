@@ -19,8 +19,8 @@ declare-command deploy-image-to-hetzner-vps name serverType imagePath waitPid? <
 Creates a new Hetzner Cloud VPS of name »name« and type/size »serverType«, optionally waits for »waitPid« to exit (successfully), copies the system image from the local »imagePath« to the new VPS, boots it, and waits until its port 22 is open.
 Requires the »HCLOUD_TOKEN« environment variable to be set.
 EOD
-declare-flag deploy-image-to-hetzner-vps vps-keep-on-build-failure '' "Do not delete the VPS if the deployment fails. Useful only for debugging (and dangerous otherwise, because the server resource is simply being \"leaked\")."
-declare-flag deploy-image-to-hetzner-vps vps-suppress-create-email '' "Prevent hetzner from sending an email with a (useless) root password for the new server to the account owner by setting the server's »ssh-key« option to »dummy«. A key of that name has to exist in »HCLOUD_TOKEN«'s cloud project."
+declare-flag deploy-system/image-to-hetzner-vps vps-keep-on-build-failure '' "Do not delete the VPS if the deployment fails. Useful only for debugging (and dangerous otherwise, because the server resource is simply being \"leaked\")."
+declare-flag deploy-system/image-to-hetzner-vps vps-suppress-create-email '' "Prevent hetzner from sending an email with a (useless) root password for the new server to the account owner by setting the server's »ssh-key« option to »dummy«. A key of that name has to exist in »HCLOUD_TOKEN«'s cloud project."
 function deploy-image-to-hetzner-vps { # 1: name, 2: serverType, 3: imagePath, 4?: waitPid
     local name=$1 serverType=$2 imagePath=$3 waitPid=${4:-} ; shift 4 || true
     local stdout=/dev/stdout ; if [[ ${args[quiet]:-} ]] ; then stdout=/dev/null ; fi
@@ -30,9 +30,9 @@ function deploy-image-to-hetzner-vps { # 1: name, 2: serverType, 3: imagePath, 4
         @{native.openssh}/bin/ssh-keygen -q -N "" -t ed25519 -f $work/$keyName -C $keyName || return
     done
 
-    echo 'Creating the VPS' >$stdout
+    echo 'Creating the VPS:' >$stdout
     if [[ ! ${args[vps-keep-on-build-failure]:-} ]] ; then prepend_trap "if [[ ! -e $work/buildSucceeded ]] ; then @{native.hcloud}/bin/hcloud server delete '$name' ; fi" EXIT || return ; fi
-    cat <<EOC |
+    cat <<EOC | # TODO: simply use JSON?
 #cloud-config
 chpasswd: null
 #ssh_pwauth: false
@@ -46,7 +46,7 @@ ssh_keys:
     ed25519_private: |
 $( cat $work/host | @{native.perl}/bin/perl -pe 's/^/        /' )
 EOC
-    @{native.hcloud}/bin/hcloud server create --image=ubuntu-22.04 --name="$name" --type="$serverType" --user-data-from-file - ${args[vps-suppress-create-email]:+--ssh-key dummy} "$@" >$stdout || return
+    ( PATH=@{native.hcloud}/bin ; ${_set_x:-:} ; hcloud server create --image=ubuntu-22.04 --user-data-from-file - --name="$name" --type="$serverType" ${args[vps-suppress-create-email]:+--ssh-key dummy} "$@" >$stdout ) || return
     # @{native.hcloud}/bin/hcloud server poweron "$name" || return # --start-after-create=false
 
     local ip ; ip=$( @{native.hcloud}/bin/hcloud server ip "$name" ) || ip=$( @{native.hcloud}/bin/hcloud server ip --ipv6 "$name" ) && echo "$ip" >$work/ip || return
