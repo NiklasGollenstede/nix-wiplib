@@ -9,7 +9,7 @@ function deploy-system-to-hetzner-vps {
 
     if [[ ! ${args[quiet]:-} ]] ; then echo 'Building the worker image' ; fi
     local image ; image=$( mktemp -u ) && prepend_trap "rm -f '$image'" EXIT || return
-    local buildPid ; args[no-inspect]=1 ; install-system "$image" & buildPid=$!
+    local buildPid ; args[no-inspect]=1 ; args[disks]=$image install-system & buildPid=$!
     if [[ ! ${args[parallel-build-deploy]:-} ]] ; then wait $buildPid || return ; fi
 
     deploy-image-to-hetzner-vps "$name" "$serverType" "$image" "${args[parallel-build-deploy]:+"$buildPid"}" "$@" || return

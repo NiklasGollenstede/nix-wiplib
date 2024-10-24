@@ -11,6 +11,7 @@
 		"agenix", // program
 		"alsamixer", // program
 		"argstr", // nix
+		"armstub", "armstubs", // program
 		"attrset", "attrsets", // nix/abbr (attribute set)
 		"autoexpand", // zfs option
 		"autologin", // agetty
@@ -20,9 +21,11 @@
 		"binfmt", // abbr "binary format"
 		"blkdiscard", // program
 		"blockdev", // program / function
+		"bluetooth", // networking
 		"bootable", // word (~= able to boot)
 		"bootloader", // word
 		"bootpart", // abbr (boot partition)
+		"broadcom", // name
 		"builtins", // nix
 		"bwrap", // program
 		"cdetect", // abbr
@@ -38,6 +41,7 @@
 		"datadir", // abbr
 		"dbus", // linux
 		"debian", // name
+		"defconfig", // linux
 		"defexpr", // nix
 		"devtmpfs", // linux
 		"dontUnpack", // nixos
@@ -48,6 +52,7 @@
 		"eeprom", // abbr
 		"elif", // bash
 		"enableRedistributableFirmware", // nixpkgs
+		"ethernet", // networking
 		"expandsz", // zfs property
 		"extglob", // option
 		"extlinux", // program
@@ -74,6 +79,9 @@
 		"gnustep", // package
 		"gollenstede", // name
 		"gpio", // abbr (general purpose IO)
+		"gpiochip", // linux
+		"gpiomem", // linux
+		"gpioset", // program
 		"gptfdisk", // package
 		"hcloud", // program
 		"hetzner", // comapny
@@ -85,12 +93,15 @@
 		"inodes", // plural
 		"ints", // plural
 		"journalctl", // program
+		"Kconfig", // linux
 		"KenjiTakahashi", // name
 		"keygen", // program
 		"lcurses", "lncurses", // option
+		"ldso32", // linux
 		"leds", // plural
 		"libblockdev", // package
 		"libexec", // linux
+		"libgpiod", // program
 		"libobjc", // package
 		"libpulseaudio", // package
 		"libraspberrypi", // program
@@ -127,6 +138,7 @@
 		"openssh", // package
 		"optimise", // B/E
 		"overridable", // word
+		"overscan", // option
 		"pacmixer", // program
 		"partlabel", // linux
 		"partprobe", // program / function
@@ -195,6 +207,7 @@
 		"unalias", // bash
 		"unallow", // zfs
 		"unbootable", // word
+		"unexport", // word
 		"uniwill", // hardware
 		"unmanaged", // word
 		"urandom", // linux

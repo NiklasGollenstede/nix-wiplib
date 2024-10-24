@@ -27,7 +27,9 @@ in {
 
     options.${prefix} = { hardware.raspberry-pi = {
         enable = lib.mkEnableOption "base configuration for Raspberry Pi 64bit hardware";
+        newBootloader = lib.mkEnableOption "...";
         i2c = lib.mkEnableOption ''the ARM i²c /dev/i2c-1 on pins 3+5 / GPIO2+3 (/ SDA+SCL). Also see `hardware.raspberry-pi."4".i2c{0,1}.enable`'';
+        gpio = lib.mkEnableOption "GPIO access for the »gpio« group via sysfs (legacy) and »/dev/gpiochip*« (e.g. libgpiod's »gpioset«)";
         lightless = lib.mkEnableOption "operation without any activity lights";
     }; };
 
@@ -39,7 +41,7 @@ in {
         config = lib.mkIf cfg.enable (builtins.removeAttrs module [ "imports" ]);
     } ]; } ] ++ module.imports;
 
-    config = lib.mkIf cfg.enable (lib.mkMerge [ ({ ## General rPI Stuff (firmware/boot/drivers)
+    config = lib.mkIf cfg.enable (lib.mkMerge [ (lib.mkIf (!cfg.newBootloader) { ## Deprecated bootloader
 
         boot.loader.raspberryPi.enable = true;
         boot.loader.raspberryPi.version = lib.mkDefault 4; # (For now only relevant with »loader.raspberryPi.uboot.enable«? Which doesn't work with RPI4 yet.)
@@ -49,9 +51,22 @@ in {
         boot.loader.generic-extlinux-compatible.enable = lib.mkForce false; # See "Notes" above
             # GPU support: https://nixos.wiki/wiki/NixOS_on_ARM/Raspberry_Pi_4#With_GPU
 
+        # TODO: didn't need these (USB-SSD boot + gpio worked)
         boot.kernelPackages = pkgs.linuxPackagesFor pkgs."linux_rpi${toString config.boot.loader.raspberryPi.version}";
         boot.initrd.kernelModules = [ ];
         boot.initrd.availableKernelModules = [ "usbhid" "usb_storage" "vc4" ]; # (»vc4« ~= VideoCore driver)
+
+
+    }) (lib.mkIf (cfg.newBootloader) { ## New Bootloader implementation
+
+        setup.bootpart.enable = true;
+
+        boot.loader.generic-extlinux-compatible.enable = true;
+        boot.loader.extra-files.enable = true;
+        boot.loader.extra-files.presets.raspberryPi = { bcm2710 = true; bcm2711 = true; };
+
+
+    }) ({ ## Drivers
 
         ## Serial console:
         # Different generations of rPIs have different hardware capabilities in terms of UARTs (driver chips and pins they are connected to), and different device trees (and options for them) and boot stages (firmware/bootloader/OS) can initialize them differently.
@@ -87,6 +102,8 @@ in {
             raspberrypi-eeprom # rpi-eeprom-update
         ];
 
+        boot.initrd.systemd.enableTpm2 = false;
+
     }) (lib.mkIf cfg.i2c { ## i2c
 
         hardware.i2c.enable = true; # includes »boot.kernelModules = [ "i2c-dev" ]« and some »services.udev.extraRules«
@@ -94,6 +111,30 @@ in {
         boot.loader.raspberryPi.firmwareConfig = "dtparam=i2c_arm=on\n"; # with the default dtb, this enables the ARM i²c /dev/i2c-1 on pins 3+5 / GPIO2+3 (/ SDA+SCL) of all tested rPI models (this has mostly the same effect as setting »hardware.raspberry-pi."4".i2c1.enable«)
         # "dtparam=i2c_vc=on" enables the VideoCore i²c on pins 27+28 / GPIO0+1, but https://raspberrypi.stackexchange.com/questions/116726/enabling-of-i2c-0-via-dtparam-i2c-vc-on-on-pi-3b-causes-i2c-10-i2c-11-t
         # (there is also »hardware.raspberry-pi."4".i2c{0,1}.enable« as an alternative way to enable i2c_arm and i2c_vc, but that option seems bcm2711(/rPI4) specific)
+
+    }) (lib.mkIf cfg.gpio { # GPIO group (this is not actually rPI specific ...)
+
+        users.groups.gpio = { };
+        services.udev.extraRules = ''
+            # /sys/class/gpio/(un)export (when device appears):
+            SUBSYSTEM=="gpio", KERNEL=="gpiochip*", ACTION=="add", \
+            RUN+="${pkgs.coreutils}/bin/chown root:gpio /sys/class/gpio/export /sys/class/gpio/unexport", \
+            RUN+="${pkgs.coreutils}/bin/chmod 220       /sys/class/gpio/export /sys/class/gpio/unexport"
+
+            # /sys/class/gpio/gpio*/{active_low,direction,value} (on export request):
+            SUBSYSTEM=="gpio", KERNEL=="gpio*", ACTION=="add", \
+            RUN+="${pkgs.coreutils}/bin/chown root:gpio /sys%p/active_low /sys%p/direction /sys%p/edge /sys%p/value", \
+            RUN+="${pkgs.coreutils}/bin/chmod 660 /sys%p/active_low /sys%p/direction /sys%p/edge /sys%p/value"
+
+            # /dev/gpiochip* (when device appears):
+            SUBSYSTEM=="gpio", KERNEL=="gpiochip*", ACTION=="add", \
+            RUN+="${pkgs.coreutils}/bin/chown root:gpio /dev/%k", \
+            RUN+="${pkgs.coreutils}/bin/chmod 660 /dev/%k"
+
+            # /dev/gpiomem:
+            SUBSYSTEM=="*gpiomem", KERNEL=="gpiomem", GROUP="gpio", MODE="0660"
+        '';
+
 
     }) (lib.mkIf cfg.lightless {
 

@@ -36,7 +36,7 @@ in { preface = {
     # Some base config:
     wip.base.enable = true;
     documentation.enable = false; # sometimes takes quite long to build
-    boot.kernelParams = [ "console=ttyS0" ]; # Only during local testing.
+    boot.kernelParams = [ "console=ttyS0" ];
     wip.services.secrets = {
         enable = true; secretsDir = "example/secrets";
         include = [ "shadow/.*" ]; # secrets that this host needs access to

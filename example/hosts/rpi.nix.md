@@ -5,10 +5,10 @@
 ## Installation
 
 ```bash
- nix run '.#rpi' -- install-system $DISK
+ nix run '.#rpi' -- install-system --disks=/dev/sdX
  nix run '.#rpi' -- --help # for more information and options
 ```
-Then connect `$DISK` to a PI, boot it, and (not much, because nothing is installed).
+Then connect `/dev/sdX` to a PI, boot it, and (not much, because nothing is installed).
 
 
 ## Implementation
