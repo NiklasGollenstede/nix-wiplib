@@ -3,7 +3,7 @@
 dirname: inputs: {
     #gcc, overrideCC, stdenv,
     llvmPackages,
-    fetchFromGitHub,
+    fetchFromGitHub, nix-update-script,
     ninja, buildPackages,
     libpulseaudio,
     ncurses,
@@ -23,6 +23,7 @@ in stdenv.mkDerivation rec {
         owner = "KenjiTakahashi"; repo = pname; rev = version;
         hash = "sha256-2cIrjix7uVw8+etBQooqKItCkTVVLhk2I5+aLx6jtLc=";
     };
+    passthru.updateScript = nix-update-script { };
 
     nativeBuildInputs = [ ninja buildPackages.gnustep.wrapGNUstepAppsHook buildPackages.gnustep.make ]; # (only relevant when cross-compiling: pretty sure that when just stating gnustep.* here, Nix has no way to automatically pass the buildPackages version)
     buildInputs = [ libpulseaudio ncurses gnustep.base gnustep.libobjc ];

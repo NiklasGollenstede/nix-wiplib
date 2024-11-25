@@ -51,6 +51,7 @@ in {
         nix.settings.ignore-try = lib.mkDefault true; # Use »--option ignore-try false« on the CLI to revert this.
         nix.settings.flake-registry = lib.mkDefault ""; # Disable the global (online) flake registry.
         nix.package = lib.mkIf (pkgs.nixVersions?nix_2_20 && lib.versionOlder pkgs.nix.version pkgs.nixVersions.nix_2_20.version) (lib.mkDefault pkgs.nixVersions.nix_2_20); # https://github.com/NixOS/nix/issues/10815
+        environment.systemPackages = [ pkgs.nix-flake-update ];
         #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
         boot.kernelParams = [ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail"); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails.

@@ -1,28 +1,29 @@
 
-declare-command deploy-system-to-hetzner-vps name serverType << 'EOD'
+declare-command deploy-system-to-hetzner-vps '-- --name=<name> --type=<serverType> [...hcloud_server_create_args]' << 'EOD'
 Builds the current system's (single »partitionDuringInstallation«ed) disk image and calls »deploy-image-to-hetzner-vps«. The installation heeds any »args« / CLI flags set.
+All positional args are passed to »hcloud server create« to decide the new server's properties. Mandatory arguments are »--name« and »--type« (note that positional args starting with »--*« have to be preceded by a »--« argument to be interpreted as such).
 Requires the »HCLOUD_TOKEN« environment variable to be set.
 EOD
 declare-flag deploy-system-to-hetzner-vps parallel-build-deploy '' "Start initializing the VPS while its image is still being built. This is faster, but the server will be billed for the first hour even if the image build fails."
 function deploy-system-to-hetzner-vps {
-    local name=$1 serverType=$2 ; shift 2 || true
-
     if [[ ! ${args[quiet]:-} ]] ; then echo 'Building the worker image' ; fi
     local image ; image=$( mktemp -u ) && prepend_trap "rm -f '$image'" EXIT || return
     local buildPid ; args[no-inspect]=1 ; args[disks]=$image install-system & buildPid=$!
-    if [[ ! ${args[parallel-build-deploy]:-} ]] ; then wait $buildPid || return ; fi
+    if [[ ! ${args[parallel-build-deploy]:-} ]] ; then wait $buildPid || return ; buildPid= ; fi
 
-    deploy-image-to-hetzner-vps "$name" "$serverType" "$image" "${args[parallel-build-deploy]:+"$buildPid"}" "$@" || return
+    args_waitPid=$buildPid deploy-image-to-hetzner-vps "$image" "$@" || return
 }
 
-declare-command deploy-image-to-hetzner-vps name serverType imagePath waitPid? << 'EOD'
-Creates a new Hetzner Cloud VPS of name »name« and type/size »serverType«, optionally waits for »waitPid« to exit (successfully), copies the system image from the local »imagePath« to the new VPS, boots it, and waits until its port 22 is open.
+declare-command deploy-image-to-hetzner-vps imagePath '-- --name=<name> --type=<serverType> [...hcloud_server_create_args]' << 'EOD'
+Creates a new Hetzner Cloud VPS, copies the system image from the local »imagePath« to the new VPS, boots it, and waits until its port 22 is open.
+For the arguments after »imagePath«, see the »deploy-system-to-hetzner-vps« command.
 Requires the »HCLOUD_TOKEN« environment variable to be set.
+If the variable »arg_waitPid« is set, it waits for that process to exit in between creating the server and copying the image to it.
 EOD
 declare-flag deploy-system/image-to-hetzner-vps vps-keep-on-build-failure '' "Do not delete the VPS if the deployment fails. Useful only for debugging (and dangerous otherwise, because the server resource is simply being \"leaked\")."
 declare-flag deploy-system/image-to-hetzner-vps vps-suppress-create-email '' "Prevent hetzner from sending an email with a (useless) root password for the new server to the account owner by setting the server's »ssh-key« option to »dummy«. A key of that name has to exist in »HCLOUD_TOKEN«'s cloud project."
-function deploy-image-to-hetzner-vps { # 1: name, 2: serverType, 3: imagePath, 4?: waitPid
-    local name=$1 serverType=$2 imagePath=$3 waitPid=${4:-} ; shift 4 || true
+function deploy-image-to-hetzner-vps { # 1: imagePath
+    local imagePath=$1 ; shift 1 || exit
     local stdout=/dev/stdout ; if [[ ${args[quiet]:-} ]] ; then stdout=/dev/null ; fi
 
     local work ; work=$( mktemp -d ) && prepend_trap "rm -rf $work" EXIT || return
@@ -46,7 +47,7 @@ ssh_keys:
     ed25519_private: |
 $( cat $work/host | @{native.perl}/bin/perl -pe 's/^/        /' )
 EOC
-    ( PATH=@{native.hcloud}/bin ; ${_set_x:-:} ; hcloud server create --image=ubuntu-22.04 --user-data-from-file - --name="$name" --type="$serverType" ${args[vps-suppress-create-email]:+--ssh-key dummy} "$@" >$stdout ) || return
+    ( PATH=@{native.hcloud}/bin ; ${_set_x:-:} ; hcloud server create --image=ubuntu-22.04 --user-data-from-file - ${args[vps-suppress-create-email]:+--ssh-key dummy} "$@" >$stdout ) || return
     # @{native.hcloud}/bin/hcloud server poweron "$name" || return # --start-after-create=false
 
     local ip ; ip=$( @{native.hcloud}/bin/hcloud server ip "$name" ) || ip=$( @{native.hcloud}/bin/hcloud server ip --ipv6 "$name" ) && echo "$ip" >$work/ip || return
@@ -67,7 +68,7 @@ EOC
         systemctl daemon-reexec ; systemctl restart sshd
     ' || return ; echo . >$stdout
 
-    if [[ $waitPid ]] ; then wait $buildPid || return ; fi
+    if [[ ${arg_waitPid:-} ]] ; then wait $buildPid || return ; fi
     echo 'Writing worker image to VPS' >$stdout
     @{native.zstd}/bin/zstd -c "$imagePath" | $sshCmd 'set -o pipefail -u -e
         </dev/null fuser -mk /old-root &>/dev/null ; sleep 2

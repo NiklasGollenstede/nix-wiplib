@@ -13,7 +13,7 @@ Since the VPSes are qemu VMs, the systems can quite accurately be tested locally
 ```
 Once the system works locally, a fresh installation can be deployed to a new VPS:
 ```bash
- HCLOUD_TOKEN=... nix run '.#<hostname>' -- deploy-system-to-hetzner-vps '<server-name>' '<server-type>'
+ HCLOUD_TOKEN=... nix run '.#<hostname>' -- deploy-system-to-hetzner-vps -- --name='<server-name>' --type='<server-type>'
  nix run '.#<hostname>' -- --help # for more details
 ```
 Or deploy an existing image using `deploy-image-to-hetzner-vps`. The `HCLOUD_TOKEN` needs to be created in the cloud console, is specific to the cloud project, has to have write access, and can be revoked after the installation.
