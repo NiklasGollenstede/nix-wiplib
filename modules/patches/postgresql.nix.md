@@ -25,7 +25,8 @@ in {
     config = lib.mkIf (cfg.enable && cfg.prevPackage != null) (let
         wrap = package: let
             base = if cfg.enableJIT && !package.jitSupport then package.withJIT else package;
-        in if cfg.extraPlugins == [ ] then base else base.withPackages (_: cfg.extraPlugins);
+            extensions = cfg.extensions or cfg.extraPlugins;
+        in if extensions == [ ] then base else base.withPackages extensions;
         esc = lib.escapeShellArg;
     in {
         services.postgresql.prevDataDir = lib.mkDefault "/var/lib/postgresql/${cfg.prevPackage.psqlSchema}";

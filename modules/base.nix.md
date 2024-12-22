@@ -60,6 +60,11 @@ in {
         services.getty.helpLine = lib.mkForce "";
         systemd.services.rtkit-daemon = lib.mkIf (config.security.rtkit.enable) { serviceConfig.LogLevelMax = lib.mkDefault "warning"; }; # spams, and probably irrelevant
 
+        boot.kernel.sysctl = {
+            "fs.inotify.max_user_instances" = lib.mkDefault 8192; # implicit default (Linux 6.6, 40GB) is 128
+            # "fs.inotify.max_user_watches" is set to min(1%RAM, 1mil) on Linux 5.12+
+        };
+
         system.extraSystemBuilderCmds = lib.mkIf config.boot.initrd.enable ''
             ln -sT ${builtins.unsafeDiscardStringContext config.system.build.bootStage1} $out/boot-stage-1.sh # (this is super annoying to locate otherwise)
         ''; # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)

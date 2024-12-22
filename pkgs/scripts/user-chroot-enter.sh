@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -o pipefail -u
 
+## Called as normal user, this sets up »/run/user/$UID/root« as a NixOS environment according to »$NIX_DIR/var/nix/profiles/system« and then »bwrap«-"chroot"s into that system/env executing »"$@"«.
+# For example: $ NIX_DIR=${nixDir} [exec] ${nixDir}${lib.removePrefix "/nix" pkgs.user-chroot-enter.src} ${lib.getExe user.shell} ''${COMMANDS:+-c "$COMMANDS"}
+
 # /nix does not exist on the host, so nix packages (@{pkgs...) are not available before entering the chroot, and this script can't be called by it's notmal path either.
 
 nixDir=$NIX_DIR ; unset NIX_DIR
@@ -53,11 +56,11 @@ source "$_setEnv" || exit # ($PATH is now useless outside bwrap)
 
 if [[ $doActivate ]] ; then
     if ! "$bwrap" --die-with-parent "${bind[@]}" -- /run/current-system/activate 1>&2 ; then
-        if ! test -e $NIXOS_CHROOT_SSH_ENTER_OPPORTUNISTIC ; then exit 1 ; fi
+        if ! test -e "${NIXOS_CHROOT_SSH_ENTER_OPPORTUNISTIC:-}" ; then exit 1 ; fi
         if "$bwrap" --die-with-parent "${bind[@]}" -- "$true" ; then
             echo 1>&2 'Proceeding after (partially) failed activation'
         else
-            echo 1>&2 'Failed to create NixOS root chroot, running on host' ; exec "$SHELL" "$@"
+            echo 1>&2 'Failed to create NixOS root chroot, running on host' ; exec "$@"
         fi
     fi
     "$touch" $root/activated || exit

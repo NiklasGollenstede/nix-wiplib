@@ -235,7 +235,7 @@ in let vps-worker = ({
         services.getty.autologinUser = "root"; # (better than a trivial root password)
 
     }) (lib.mkIf (!noFS) { ## Expand Partitions (local/rpool+swap)
-        boot.initrd.postDeviceCommands = let
+        boot.initrd.postResumeCommands = let
             noSpace = str: str; # TODO: assert that the string contains neither spaces nor single or double quotes
             createPart = disk: part: lib.concatStringsSep " " [
                 "--set-alignment=${toString (if part.alignment != null then part.alignment else disk.alignment)}"

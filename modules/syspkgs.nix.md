@@ -8,7 +8,7 @@ Make `nixpkgs`/`pkgs`, exactly as configured, applied with overlays, and otherwi
 ## Implementation
 
 ```nix
-#*/# end of MarkDown, beginning of NixOS module patch:
+#*/# end of MarkDown, beginning of NixOS module:
 dirname: inputs: { config, pkgs, lib, ... }@moduleArgs: let lib = inputs.self.lib.__internal__; in let
     cfg = config.nix.syspkgs;
 in {

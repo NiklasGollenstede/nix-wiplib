@@ -5,7 +5,7 @@
 ); inputs = {
 
     # To update »./flake.lock«: $ nix flake update
-    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-24.05"; };
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-24.11"; };
     nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; };
     functions = { url = "github:NiklasGollenstede/nix-functions"; inputs.nixpkgs.follows = "nixpkgs"; };
     installer = { url = "github:NiklasGollenstede/nixos-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.functions.follows = "functions"; };

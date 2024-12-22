@@ -26,6 +26,14 @@ function deploy-image-to-hetzner-vps { # 1: imagePath
     local imagePath=$1 ; shift 1 || exit
     local stdout=/dev/stdout ; if [[ ${args[quiet]:-} ]] ; then stdout=/dev/null ; fi
 
+    local name ; for ((i = 0; i < $#; i++)) ; do
+        if [[ ${!i} == "--name" ]] && (( i + 1 < $# )) ; then
+            name="${!((i+1))}" ; break
+        elif [[ ${!i} == --name=* ]] ; then
+            name="${!i#--name=}" ; break
+        fi
+    done ; if [[ ! $name ]] ; then echo '»--name[=]« argument missing!' >&2 ; \return 1 ; fi
+
     local work ; work=$( mktemp -d ) && prepend_trap "rm -rf $work" EXIT || return
     local keyName ; for keyName in host login ; do
         @{native.openssh}/bin/ssh-keygen -q -N "" -t ed25519 -f $work/$keyName -C $keyName || return

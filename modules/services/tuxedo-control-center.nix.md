@@ -57,7 +57,7 @@ in let module = {
         package = pkgs.tuxedo-control-center;
     in {
 
-        hardware.tuxedo-keyboard.enable = true;
+        hardware.tuxedo-drivers.enable = true;
         boot.kernelModules = [ "clevo_acpi" "tuxedo_io" ]; # (These seem to be related to hotkeys, but weren't loaded on my Ubuntu laptop: "clevo_wmi" "uniwill_wmi")
 
         systemd.packages = [ package ]; systemd.services.tccd = {

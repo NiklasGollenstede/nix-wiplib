@@ -1,35 +1,56 @@
 dirname: inputs: {
-    nodejs, # tcc uses v14, v20 works
+    nodejs_20, # tcc uses v14, v20 works, v22 doesn't compile
     electron, # tcc uses v13, v29 works
-    buildNpmPackage, fetchFromGitHub, buildPackages,
+    buildNpmPackage, importNpmLock, fetchFromGitHub, runCommandLocal, applyPatches, nix-update-script, buildPackages,
     bash, udev, python3,
     coreutils, procps, gnugrep, gnused, gawk, xorg, which, # wrapper
-lib }: let
-    version = "2.1.8"; rev = "v${version}";
-    srcHash = "sha256-SIRm2+1lkPnzITT3VmshTXDen43y3v9OCIMoIjrPJSE="; # after updating the lockfile, see below
-    npmDepsHash = "sha256-1hedSJm+nvKCZhDoefM4j2pTSfywfHeRIWs8x5iDUQY=";
-
+}: let
+    lib = inputs.self.lib.__internal__;
     replace = if (builtins.substring 0 5 lib.version) >= "24.05" then "--replace-fail" else "--replace";
-in (buildNpmPackage.override { nodejs = buildPackages.nodejs; }) rec {
-    pname = "tuxedo-control-center"; inherit version;
 
-    src = (fetchFromGitHub { # https://github.com/tuxedocomputers/tuxedo-control-center
-        owner = "tuxedocomputers"; repo = pname; name = "${pname}-src"; inherit rev; hash = srcHash;
-        # The lockfile format is outdated (node 14) and buildNpmPackage can't handle (the way that it includes?) a git+https reference.
-        # This may very well undo a bugfix (in that forked reference) and cause the source hash to be unstable, but it works for now.
-        postFetch = ''(
-            HOME=$( realpath /build/home ) ; cd $out
-            export PATH=$PATH:${lib.makeBinPath [ buildPackages.nodejs buildPackages.which buildPackages.git buildPackages.openssh ]}
-            export NODE_EXTRA_CA_CERTS=${buildPackages.cacert}/etc/ssl/certs/ca-bundle.crt
-            npm uninstall --package-lock-only --legacy-peer-deps --ignore-scripts node-ble || exit
-            npm install --package-lock-only --legacy-peer-deps --ignore-scripts --legacy-peer-deps node-ble@1.9.0 || exit
-        )'';
-    }); inherit npmDepsHash;
+    pname = "tuxedo-control-center"; version = "2.1.15";
+    srcHash = "sha256-UibIWAFMURIHsofFM9dHm+liqXt55l1pReIhgCUa0l0=";
+    packageLock = ./tuxedo-control-center.lock; # copy `package-lock.json` from `pkgs.tuxedo-control-center.passthru.lockfiles`
+    npmDepsHash = "sha256-Gu4X+tpsIsoRJQF9ga2+Oy3EYDr3CCgIppjRzAVPcAU=";
+    buildNodejs = buildPackages.nodejs_20; nodejs = nodejs_20;
+
+    src = fetchFromGitHub { # https://github.com/tuxedocomputers/tuxedo-control-center
+        owner = "tuxedocomputers"; repo = pname; name = "${pname}-src"; rev = "v${version}"; hash = srcHash;
+    };
+    # The lockfile format is outdated (node 14). If this does not get fixed beforehand, then npm will try to do it later (and fail or get stuck).
+    # This may cause the source hash to be unstable, so (unfortunately) it needs to be persisted.
+    # NPM also get's stuck or fails if a git+https reference is left in the lockfile.
+    # Replacing that may very well undo a bugfix (in that forked reference) and cause the source hash to be unstable.
+    lockfiles = runCommandLocal "tcc-lockfiles" { __impure = true; } ''
+        cp ${src}/package{,-lock}.json . ; chmod +w package{,-lock}.json
+        HOME=$( realpath /build/home )
+        export PATH=$PATH:${lib.makeBinPath [ buildNodejs buildPackages.which buildPackages.git buildPackages.openssh ]}
+        export NODE_EXTRA_CA_CERTS=${buildPackages.cacert}/etc/ssl/certs/ca-bundle.crt
+        npm uninstall --package-lock-only --legacy-peer-deps --ignore-scripts node-ble || exit
+        npm install --package-lock-only --legacy-peer-deps --ignore-scripts --legacy-peer-deps node-ble@1.9.0 || exit
+        mkdir -p $out ; cp package{,-lock}.json $out
+    '';
+        #npm install --package-lock-only --legacy-peer-deps --ignore-scripts
+
+in buildNpmPackage {
+    inherit pname version; nodejs = buildNodejs;
+
+    src = applyPatches { inherit src; inherit (src) name; postPatch = ''
+        substituteInPlace package.json ${replace} 'git+https://github.com/tuxedoxt/node-ble.git#match-and-event-leak-fixes-v2' '1.9.0'
+        cp -T ${packageLock} package-lock.json
+    ''; }; inherit npmDepsHash;
+
+    #inherit src; npmDeps = importNpmLock { # this (with each NPM package in its own derivation) fails with some gyp error
+    #    npmRoot = src; packageLock = lib.importJSON packageLock;
+    #}; npmConfigHook = importNpmLock.npmConfigHook;
+
+    #passthru.updateScript = nix-update-script { }; # (this couldn't update the lockfile)
 
     # Compatibility options:
     makeCacheWritable = true;
     npmPackFlags = [ "--ignore-scripts" ];
     npmFlags = [ "--legacy-peer-deps" ]; # "--loglevel=verbose"
+    #npmInstallFlags = [ "--offline" "--verbose" ];
     NODE_OPTIONS = "--openssl-legacy-provider";
 
     nativeBuildInputs = [ buildPackages.git buildPackages.pkg-config buildPackages.python3 ];
@@ -89,6 +110,7 @@ in (buildNpmPackage.override { nodejs = buildPackages.nodejs; }) rec {
         runHook postInstall
     '';
 
+    passthru = { inherit lockfiles; };
     meta = {
         homepage = "https://github.com/tuxedocomputers/tuxedo-control-center";
         description = "A tool to help you control performance, energy, fan and comfort settings on TUXEDO laptops.";

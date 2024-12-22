@@ -133,6 +133,7 @@ in ({
         ssh-enter.opportunistic = lib.mkOption { type = lib.types.bool; default = true; description = ''
             If the entry hook is only partially installed, try to proceed with a notmal SSH connection to the host environment, instead of failing.
         ''; };
+        rootMode.extra-containers.enable = lib.mkEnableOption ''automatic startup (at boot) and updating (with the chroot) of any `config.containers`'';
     }; };
 
 
@@ -186,7 +187,11 @@ in ({
                 strings = builtins.match ''(.*)/nix/store/[a-z0-9]+-update-users-groups[.]pl(.*)'' script;
             in (lib.addContextFrom script (builtins.elemAt strings 0) + patched + (builtins.elemAt strings 1)))))
         ];
-    };
+    } // (lib.optionalAttrs (config.age.secrets or { } != { }) { # fix »/run/agenix« symlink as seen from outside the chroot:
+        agenixInstall.text = lib.mkAfter (let cfg = config.age; in ''
+            ln -sfT "$( realpath -s --relative-to=$( dirname ${cfg.secretsDir} ) "${cfg.secretsMountPoint}/$_agenix_generation" )" ${cfg.secretsDir}
+        '');
+    });
     users.mutableUsers = lib.mkForce true; # (want to append to the host's users)
     environment.variables.NIX_REMOTE = lib.mkForce "";
     environment.stub-ld.enable = lib.mkIf (cfg.mode == "user") (lib.mkDefault false);
@@ -195,7 +200,8 @@ in ({
         inherit (config.boot.specialFileSystems) "/proc";
         "/sys" = { fsType = "sysfs"; options = [ "nosuid" "noexec" "nodev" ]; };
     }) // (lib.optionalAttrs (cfg.mode == "root") {
-        inherit (config.boot.specialFileSystems) "/run" "/run/keys" "/run/wrappers";
+        inherit (config.boot.specialFileSystems) "/run" "/run/keys";
+        "/run/wrappers" =  { fsType = "tmpfs"; options = [ "nodev" "mode=755" "size=${config.security.wrapperDirSize}" ]; };
         "/proc/sys/fs/binfmt_misc" = { fsType = "binfmt_misc"; device = "binfmt_misc"; options = [ "nosuid" "noexec" "nodev" ]; };
     }) // (lib.optionalAttrs (cfg.mode == "user") {
         "/dev" = { fsType = "devtmpfs"; device = "auto"; };
@@ -285,7 +291,29 @@ in {
     security.sudo.extraRules = [ { users = map (_:_.name) (builtins.filter (_:_.isNormalUser) (builtins.attrValues config.users.users)); commands = [ { command = "ALL"; options = [ "NOPASSWD" ]; } ]; } ];
 
 
-}) ({
+}) (lib.mkIf (cfg.mode == "root" && cfg.rootMode.extra-containers.enable) (let ## »extra-containers«
+    extra-container = pkgs.writeShellScriptBin "extra-container" ''
+        /run/wrappers/bin/sudo PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin EXTRA_CONTAINER_ETC=/nix/var/nix/profiles/system chroot /proc/1/cwd ${lib.getExe pkgs.extra-container} "$@"
+    '';
+in {
+
+    # (this broke the boot process of the host)
+    #systemd.services = lib.mkMerge (lib.mapAttrsToList (name: cfg: { "container@${name}" = {
+    #    unitConfig.RequiresMountsFor = map (lib.removePrefix "/host") (lib.filter (lib.hasPrefix "/host/") (lib.mapAttrsToList (__: _:_.device) config.fileSystems));
+    #    preStart = ''if [[ ! -e /run/nixos-root/activated && ! -e /run/nixos-root/run/activating-containers ]] ; then ${lib.getExe pkgs.root-chroot-enter} ; fi'';
+    #}; }) config.containers);
+
+    environment.systemPackages = [ (lib.hiPrio extra-container) ]; # For "machinectl" on Ubuntu: apt-get install -y systemd-container
+    system.activationScripts.extra-container = { text = ''
+        touch /run/activating-containers
+        ${lib.getExe extra-container} create --start --update-changed
+        rm /run/activating-containers
+    ''; deps = [ "wrappers" ]; };
+        /* ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: cfg': lib.optionalString cfg'.autoStart ''
+        '') config.containers)} */
+
+
+})) ({
 
     environment.shellAliases = if cfg.mode == "root" then {
         nixos-rebuild-switch = ''( system=$( nix build --no-link --print-out-paths "$(realpath /etc/nixos)"#nixosConfigurations."$(hostname)".config.system.build.toplevel ) && sudo nix-env -p /nix/var/nix/profiles/system --set "$system" && sudo /nix/var/nix/profiles/system/activate )''; # (»sudo nixos-rebuild switch« fails to find git; because of some mount-namespace issues?)

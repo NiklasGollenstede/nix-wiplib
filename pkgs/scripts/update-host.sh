@@ -16,6 +16,8 @@ This script uses Nix locally (and when exported by a flake that flake's nixpkgs'
 Any extra arguments are passed to the nix eval and build commands, so something like »-- --debugger --keep-going« can be useful.
 "
 
+PATH=@{pkgs.openssh}/bin:@{pkgs.git}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:@{pkgs.nix}/bin
+
 generic-arg-parse "$@" || exit
 generic-arg-help "update-host" "$argvDesc" "$description" "$details" || exit
 exitCode=2 generic-arg-verify || exit
@@ -24,10 +26,7 @@ predicate=${argv[1]:-switch}
 
 #[[ targetHost =~ ^[a-z0-9-]+$ ]]
 if [[ ! ${argv[0]:-} && ! ${args[name]:-} ]] ; then args[name]=$targetHost ; fi
-hostname=${args[name]:-$( ssh "$targetHost" -- hostname )} || exit
-
-#localNix=$( @{pkgs.which!getExe} nix )
-PATH=@{pkgs.openssh}/bin:@{pkgs.git}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:@{pkgs.nix}/bin
+hostname=${args[name]:-$( ssh "$targetHost" -T -- hostname )} || exit
 
 if [[ ! ${args[remote-eval]:-} ]] ; then
     drvPath=$( nix eval --extra-experimental-features 'nix-command flakes' --raw .#nixosConfigurations."$hostname".config.system.build.toplevel.drvPath "${argv[@]:2}" ) || exit

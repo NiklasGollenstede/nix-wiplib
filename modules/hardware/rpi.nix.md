@@ -27,7 +27,6 @@ in {
 
     options.${prefix} = { hardware.raspberry-pi = {
         enable = lib.mkEnableOption "base configuration for Raspberry Pi 64bit hardware";
-        newBootloader = lib.mkEnableOption "...";
         i2c = lib.mkEnableOption ''the ARM i²c /dev/i2c-1 on pins 3+5 / GPIO2+3 (/ SDA+SCL). Also see `hardware.raspberry-pi."4".i2c{0,1}.enable`'';
         gpio = lib.mkEnableOption "GPIO access for the »gpio« group via sysfs (legacy) and »/dev/gpiochip*« (e.g. libgpiod's »gpioset«)";
         lightless = lib.mkEnableOption "operation without any activity lights";
@@ -41,23 +40,7 @@ in {
         config = lib.mkIf cfg.enable (builtins.removeAttrs module [ "imports" ]);
     } ]; } ] ++ module.imports;
 
-    config = lib.mkIf cfg.enable (lib.mkMerge [ (lib.mkIf (!cfg.newBootloader) { ## Deprecated bootloader
-
-        boot.loader.raspberryPi.enable = true;
-        boot.loader.raspberryPi.version = lib.mkDefault 4; # (For now only relevant with »loader.raspberryPi.uboot.enable«? Which doesn't work with RPI4 yet.)
-        #boot.loader.raspberryPi.native.copyOldKernels = false; # TODO: Should tell  »raspberrypi-builder.sh#copyToKernelsDir« to not to copy old kernels (but instead let the user get them from the main FS to restore them). This is implemented in the script, but there is no option (or code path) to change that parameter.
-            # use »boot.loader.raspberryPi.version = 3;« for Raspberry PI 3(B+)
-        boot.loader.grub.enable = false;
-        boot.loader.generic-extlinux-compatible.enable = lib.mkForce false; # See "Notes" above
-            # GPU support: https://nixos.wiki/wiki/NixOS_on_ARM/Raspberry_Pi_4#With_GPU
-
-        # TODO: didn't need these (USB-SSD boot + gpio worked)
-        boot.kernelPackages = pkgs.linuxPackagesFor pkgs."linux_rpi${toString config.boot.loader.raspberryPi.version}";
-        boot.initrd.kernelModules = [ ];
-        boot.initrd.availableKernelModules = [ "usbhid" "usb_storage" "vc4" ]; # (»vc4« ~= VideoCore driver)
-
-
-    }) (lib.mkIf (cfg.newBootloader) { ## New Bootloader implementation
+    config = lib.mkIf cfg.enable (lib.mkMerge [ ({ ## Bootloader
 
         setup.bootpart.enable = true;
 

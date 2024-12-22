@@ -11,7 +11,7 @@ See [the README](./README.md) for motivation and concepts.
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: { options, config, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
+dirname: inputs: { options, config, pkgs, lib, utils, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = "wip"; #inputs.config.prefix;
     cfg = config.${prefix}.services.zfs.receive;
 in { imports = [ {
@@ -42,7 +42,7 @@ in { imports = [ {
                     defaultText = ''config.${prefix}.services.zfs.receive.getSshKey .name'';
                     type = lib.types.singleLineStr;
                     description = "Verbatim OpenSSH public key used by the sending host.";
-                    example = [ "ssh-ed25519 AAAAC3NzaCetcetera/etceteraJZMfk3QPfQ backup@<hostname>" ];
+                    example = [ "ssh-ed25519 AAAAC3NzaC/etcetera/etcetera/JZMfk3QPfQ backup@<hostname>" ];
                 };
                 user = lib.mkOption { default = "zfs-from-${name}"; type = lib.types.str; };
                 uid = lib.mkOption { type = lib.types.int; };
@@ -54,6 +54,10 @@ in { imports = [ {
         getSshKey = lib.mkOption {
             type = lib.types.functionTo lib.types.singleLineStr;
         };
+        #name = lib.mkOption { default = "zfs-from-${name}"; type = lib.types.str; description = ''
+        #    Name of this receive target used by all senders as `${prefix}.services.zfs.send.datasets.*.targets.*.name`.
+        #''; };
+        syncSnapsToKeep = lib.mkOption { type = lib.types.listOf (lib.types.strMatching "[a-zA-Z0-9_-]*"); default = [ ]; };
     }; };
 
 
@@ -91,8 +95,8 @@ in { imports = [ {
 
 
     })) (lib.mkIf (cfg.dataset != null) (let
-        gc-service = (lib.fun.importWrapped inputs "${dirname}/utils/gc-sync-snaps-service.nix").result { inherit (cfg) dataset; inherit pkgs lib; label = config.${prefix}.services.zfs.send.forwardPendingProperty; };
-        reset-service = (lib.fun.importWrapped inputs "${dirname}/utils/reset-recv-service.nix").result { inherit (cfg) dataset; inherit pkgs lib; };
+        gc-service = (lib.fun.importWrapped inputs "${dirname}/utils/gc-sync-snaps-service.nix").result { inherit (cfg) dataset; inherit pkgs lib utils; label = config.${prefix}.services.zfs.send.forwardPendingProperty; };
+        reset-service = (lib.fun.importWrapped inputs "${dirname}/utils/reset-recv-service.nix").result { inherit (cfg) dataset; snapPrefix = lib.optionalString (cfg.syncSnapsToKeep != [ ]) "syncoid_(${lib.concatStringsSep "|" cfg.syncSnapsToKeep})_"; inherit pkgs lib utils; };
         ensurePendingProp = source: "+" + ''/run/booted-system/sw/bin/zfs set ${config.${prefix}.services.zfs.send.forwardPendingProperty}=${lib.concatStringsSep ":" source.forwardingTo} ${source.path}'';
     in {
         ## Prune snapshots in backup »dataset«

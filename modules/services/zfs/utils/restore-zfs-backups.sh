@@ -42,7 +42,9 @@ function restore-zfs-dataset { # 1: source, 2: dataset, ...: syncoidOptions
 
     echo "Restoring $dataset from $source with command:"
     ( set -x ; : "${syncoid[@]}" )
-    read -p 'Enter to continue, or Ctrl+C to abort:' || return
+    if [[ ! ${args[no-optional-prompts]:-} ]] ; then
+        read -p 'Enter to continue, or Ctrl+C to abort:' || return
+    fi
 
     if [[ ${SUDO_USER:-} ]] ; then
         @{native.zfs}/bin/zfs allow -u "$SUDO_USER" create,receive,mount,destroy "$parent" || return
