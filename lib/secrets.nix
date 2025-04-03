@@ -15,7 +15,7 @@ in {
         getPrivateKeyPath ? pkgs: ''echo "$HOME/.ssh/id_ed25519"'', # A bash script snippet that returns the path to the private key file/identity used to decrypt secrets (explicitly or when editing/rekeying existing secrets). Its public key should be in `adminPubKeys`.
         hostNeedsSecret ? hostName: { config, ... }: if config.wip.services.secrets.include == [ ] then path: false else lib.concatStringsSep "|" config.wip.services.secrets.include, # `...: ( "wg/.*@${hostName}|ssh/service/.*@${hostName}" | ("secrets/<...>.age": true|false) )`: Function of host to the secrets it can decrypt. The function arguments are the same as for `getHostPubKey`, and the matching logic is the same as for the values of `adminPubKeys`.
         getHostPubKey ? hostName: { config, ... }: let path = "${inputs.self.outPath}/${secretsDir}/ssh/host/host@${hostName}.pub"; in if builtins.pathExists path then builtins.readFile path else null, # `...: "ssh-ed25519 ..."|null`: Function mapping hosts to their decryption key's public identity. The arguments are an attribute name and corresponding value of `hosts`.
-        hosts ? inputs.self.nixosConfigurations, # Attribute set of NixOS configurations that need to access secrets.
+        hosts ? inputs.self.nixosConfigurations, # Attribute set of NixOS configurations that need to access secrets. Note that the attribute names may matter for default key locations (see above).
         repoRoot ? inputs.self.outPath, # Path to the root of the flake/repository.
         secretsDir ? "secrets", # Relative path of the dir in `repoRoot` where secrets are stored.
         appName ? "secrets", # Name of the exported app (`nix run .#$appName -- ...`).
@@ -57,7 +57,7 @@ in {
                         set -- --edit "''${@:2}"
                         pubExisted= ; if [[ -e ''${2%.age}.pub ]] ; then pubExisted=1 ; fi
                         if [[ $genSSH ]] ; then
-                            ${pkgs.openssh}/bin/ssh-keygen -q -N "" -t ed25519 -f "''${2%.age}" -C "" || exit
+                            ${pkgs.openssh}/bin/ssh-keygen -q -N "" -t ed25519 -f "''${2%.age}" -C "''${2%.age}" || exit
                             private=$( cat "''${2%.age}" ) && rm -f "''${2%.age}" || exit
                         elif [[ $genTLS ]] ; then
                             keyOpts=( -algorithm ED25519 ) ; keyOpts=( -algorithm RSA -pkeyopt rsa_keygen_bits:2048 )

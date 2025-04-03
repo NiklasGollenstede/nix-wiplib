@@ -65,9 +65,26 @@ in {
 
         }) { s = ""; u = " --user"; });
 
+        programs.bash.blesh.enable = true;
+        environment.interactiveShellInit = ''
+            if command -v ble-bind &>/dev/null ; then
+                ble-bind -f 'C-RET' 'accept-line' ; ble-bind -f 'S-RET' 'newline' # Shift+Enter -> new line ; Ctrl+Enter -> submit (this requires the terminal to send escape sequences for those key combinations)
+            fi
+        '';
+        /* programs.bash.promptInit = lib.mkAfter ''
+            if command -v ble-bind &>/dev/null ; then
+                function wip/cmd_timer/preexec {
+                    _wip_cmd_timer_start=$( date +%s%3N )
+                }
+                ble/array#push preexec_functions wip/cmd_timer/preexec
+            fi
+        ''; */ # TODO: use that below ...
+
+    }) ({
+
         programs.bash.promptInit = let
             red = "91"; green = "92";
-            PS1 = user: host: ''\[\e[0m\]\[\e[48;5;234m\]\[\e[96m\]$(printf "%-+ 4d" $?)\[\e[93m\][\D{%Y-%m-%d %H:%M:%S}] \[\e[${user}m\]\u\[\e[97m\]@\[\e[${host}m\]\h\[\e[97m\]:\[\e[96m\]\w'"''${TERM_RECURSION_DEPTH:+\[\e[91m\]["$TERM_RECURSION_DEPTH"]}"'\[\e[24;97m\]\$ \[\e[0m\]'';
+            PS1 = user: host: ''\[\e[0m\]\[\e[48;5;234m\]\[\e[$( e=$? ; [[ $e == 0 ]] && printf 96 || printf 91 ; exit $e )m\]$( printf "%3d" $? ) \[\e[93m\][\D{%Y-%m-%d %H:%M:%S}] \[\e[${user}m\]\u\[\e[97m\]@\[\e[${host}m\]\h\[\e[97m\]:\[\e[96m\]\w'"''${TERM_RECURSION_DEPTH:+\[\e[91m\]["$TERM_RECURSION_DEPTH"]}"'\[\e[24;97m\]\$ \[\e[0m\]'';
         in ''
             # Provide a nice prompt if the terminal supports it.
             if [ "''${TERM:-}" != "dumb" ] ; then
@@ -82,8 +99,11 @@ in {
                     PS1="\[\033]2;\h:\u:\w\007\]$PS1"
                 fi
             fi
+            if [[ $( realpath "$BASH" ) != *-interactive-* ]] ; then # The non-interactive version of bash does not remove »\[« and »\]« from $PS1 (but without those the terminal gets confused about the cursor position after the prompt once one types more than a bit of text there (at least via serial or SSH)).
+                PS1=''${PS1//\\[/} ; PS1=''${PS1//\\]/}
+            fi
             export TERM_RECURSION_DEPTH=$(( 1 + ''${TERM_RECURSION_DEPTH:-0} ))
-        ''; # The non-interactive version of bash does not remove »\[« and »\]« from PS1, but without those the terminal gets confused about the cursor position after the prompt once one types more than a bit of text there (at least via serial or SSH).
+        '';
 
         environment.interactiveShellInit = lib.mkBefore ''
             # In REPL mode: remove duplicates from history; don't save commands with a leading space.

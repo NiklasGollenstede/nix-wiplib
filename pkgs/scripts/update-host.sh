@@ -2,7 +2,7 @@ set -o pipefail -u
 
 description="Updates the NixOS configuration running on a host via SSH.
 "
-argvDesc='[sshHostname [verb=switch [...nix options]]]'
+argvDesc='[sshHostname=$(hostname)] [verb=switch] [...nix options]'
 declare -g -A allowedArgs=(
     [--name=<string>]="Optional name of the »nixosConfigurations« attribute to use as the target host's configuration. Uses the output of »hostname« run on the target, if not supplied."
     [--remote-eval]="Perform the evaluation on the target system after using »push-flake«"
@@ -16,11 +16,14 @@ This script uses Nix locally (and when exported by a flake that flake's nixpkgs'
 Any extra arguments are passed to the nix eval and build commands, so something like »-- --debugger --keep-going« can be useful.
 "
 
-PATH=@{pkgs.openssh}/bin:@{pkgs.git}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:@{pkgs.nix}/bin
+PATH=@{pkgs.coreutils}/bin:@{pkgs.openssh}/bin:@{pkgs.git}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:@{pkgs.nix}/bin
 
 generic-arg-parse "$@" || exit
-generic-arg-help "update-host" "$argvDesc" "$description" "$details" || exit
+generic-arg-help "update-host" "$argvDesc" "$description" "$details" || exit # requires coreutils
 exitCode=2 generic-arg-verify || exit
+#if [[ ${argv[0]:-} == -* ]] ; then echo 'Hostname may not start with a dash' >&2 ; exit 1 ; fi
+if [[ ${argv[0]:-} == -* ]] ; then argv=( '' "${argv[@]}" ) ; exit 1 ; fi
+if [[ ${argv[1]:-} == -* ]] ; then argv=( "${argv[0]:-}" '' "${argv[@]:1}" ) ; fi
 targetHost=${argv[0]:-$( hostname )}
 predicate=${argv[1]:-switch}
 

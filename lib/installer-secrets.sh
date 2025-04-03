@@ -23,7 +23,7 @@ function post-mount--secrets {
 
 copy-function prompt-for-user-passwords{,--before-secrets}
 function prompt-for-user-passwords { # (void)
-    if [[ ! @{config.wip.services.secrets.enable:-} ]] ; then prompt-for-user-passwords--before-secrets ; return ; fi
+    if [[ ! @{config.wip.services.secrets.enable:-} ]] ; then prompt-for-user-passwords--before-secrets "$@" ; return ; fi
     declare -g -A userPasswords=( ) # (this ends up in the caller's scope)
     local user ; for user in "@{!config.users.users!catAttrSets.password[@]}" ; do # Also grab any plaintext passwords for testing setups.
         userPasswords[$user]=@{config.users.users!catAttrSets.password[$user]}

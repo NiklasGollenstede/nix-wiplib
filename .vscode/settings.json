@@ -6,218 +6,225 @@
 	},
 	"cSpell.diagnosticLevel": "Information", // to find spelling mistakes
 	"cSpell.words": [
-		"aarch64", // processor architecture
-		"acpi", // hardware
-		"agenix", // program
-		"alsamixer", // program
-		"argstr", // nix
-		"armstub", "armstubs", // program
-		"attrset", "attrsets", // nix/abbr (attribute set)
-		"autoexpand", // zfs option
-		"autologin", // agetty
-		"autoprune", // ZFS
-		"autosnap", // ZFS
-		"bindir", // abbr
-		"binfmt", // abbr "binary format"
-		"blkdiscard", // program
-		"blockdev", // program / function
-		"bluetooth", // networking
-		"bootable", // word (~= able to boot)
-		"bootloader", // word
-		"bootpart", // abbr (boot partition)
-		"broadcom", // name
-		"builtins", // nix
-		"bwrap", // program
-		"cdetect", // abbr
-		"clevo", // name
-		"cmds", // abbr (commands)
-		"concat", // abbr
-		"conv", // dd option
-		"coreutils", // package
-		"cppflags", // option
-		"CWD", // abbr
-		"cykerway", // name
-		"darwin", // name
-		"datadir", // abbr
-		"dbus", // linux
-		"debian", // name
-		"defconfig", // linux
-		"defexpr", // nix
-		"devtmpfs", // linux
-		"dontUnpack", // nixos
-		"dropbear", // program
-		"dtoverlay", // option
-		"dtparam", // option
-		"ectory", // "dir"ectory
-		"eeprom", // abbr
-		"elif", // bash
-		"enableRedistributableFirmware", // nixpkgs
-		"ethernet", // networking
-		"expandsz", // zfs property
-		"extglob", // option
-		"extlinux", // program
-		"fanspeed", // concat
-		"fetchurl", // nix function
-		"filesystems", // plural
-		"firejail", // program
-		"firmwareLinuxNonfree", // nixpkgs
-		"foldl", // nix (fold left)
-		"foldr", // nix (fold right)
-		"fstrim", // program
-		"fuser", // optoin
-		"fw_printenv", // program
-		"fw_setenv", // program
-		"gcroots", // nix
-		"genkey", // abbr (generate key)
-		"genkeytypes", // concat
-		"getent", // program / function
-		"getsize64", // cli arg
-		"getty", // program
-		"github", // name
-		"gnugrep", // package
-		"gnused", // package
-		"gnustep", // package
-		"gollenstede", // name
-		"gpio", // abbr (general purpose IO)
-		"gpiochip", // linux
-		"gpiomem", // linux
-		"gpioset", // program
-		"gptfdisk", // package
-		"hcloud", // program
-		"hetzner", // comapny
-		"HISTCONTROL", // bash option
-		"hugepages", // linux
-		"ignoredups", // bash option
-		"ignorespace", // bash option
-		"initdb", // abbr
-		"inodes", // plural
-		"ints", // plural
-		"journalctl", // program
-		"Kconfig", // linux
-		"KenjiTakahashi", // name
-		"keygen", // program
-		"lcurses", "lncurses", // option
-		"ldso32", // linux
-		"leds", // plural
-		"libblockdev", // package
-		"libexec", // linux
-		"libgpiod", // program
-		"libobjc", // package
-		"libpulseaudio", // package
-		"libraspberrypi", // program
-		"libubootenv", // package
-		"libyaml", // package
-		"linux", // name
-		"logind", // program
-		"luks", // linux
-		"mkdir", // program / function
-		"mkenvimage", // program
-		"mkpasswd", // program
-		"mktemp", // program / function
-		"mountpoint", // program / function
-		"mtab", // linux
-		"namei", // program
-		"namespacing", // word
-		"netns", // linux
-		"niklas", // name
-		"nixos", // (duh)
-		"nixpkgs", // nix
-		"noatime", // mount option
-		"nodev", // mount option
-		"nodiscard", // cli arg
-		"noexec", // mount option
-		"nofile", // option (number of files)
-		"NOPASSWD", // sudo
-		"noprofile", // option
-		"nosuid", // mount option
-		"notrunc", // dd option
-		"ntfs", // filesystem
-		"objc", // abbr
-		"ondemand", // concat
-		"oneshot", // systemd
-		"openssh", // package
-		"optimise", // B/E
-		"overridable", // word
-		"overscan", // option
-		"pacmixer", // program
-		"partlabel", // linux
-		"partprobe", // program / function
-		"passthru", // nix
-		"passwordless", // word
-		"pipefail", // bash
-		"pkgs", // nix
-		"pname", // nix/abbr (package name)
-		"posix", // word
-		"postgresql", // program
-		"poweroff", // program / function
-		"poweron", // concat
-		"powersave", // linux
-		"psqlSchema", // abbr
-		"pubkey", // abbr (public key)
-		"pulsemixer", // program
-		"pwauth", // abbr (password authentication)
-		"raidz", // zfs
-		"ramfs", // linux
-		"raspberrypi", // abbr
-		"raspberrypifw", // package
-		"rbind", // linux
-		"readlink", // program / function
-		"realpath", // program / function
-		"recvoptions", // zfs: syncoid
-		"reexec", // option
-		"refreservation", // zfs
-		"resolv", // linux
-		"robotnix", // package
-		"rootfs", // abbr (root filesystem)
-		"rpiboot", // package
-		"rpool", // zfs
-		"rprivate", // linux
-		"rtkit", // program
-		"ryantm", // name
-		"sanoid", // program
-		"sbabic", // name
-		"sendoptions", // zfs: syncoid
-		"sgdisk", // program
-		"sgid", // linux
-		"shopt", // option
-		"specialfs", // nix
-		"stdenv", // nix
-		"stty", // program / function
-		"subgid", // linux
-		"subuid", // linux
-		"syncoid", // program
-		"sysfs", // linux
-		"syslinux", // package
-		"syspkgs", // abbr (system packages)
-		"sysrq", // linux
-		"tccd", // program
-		"temproot", // abbr (temporary root (FS))
-		"timefmt", // option
-		"tmpdir", // program
-		"tmpfiles", // nixos option
-		"tmpfs", // linux
-		"toor", // "root" in reverse
-		"toplevel", // nix
-		"typecode", // cli arg
-		"uart", "uarts", // serial protocol
-		"uboot", // program
-		"udev", // program
-		"udptunnel", // program
-		"UEFI", // abbr
-		"unalias", // bash
-		"unallow", // zfs
-		"unbootable", // word
-		"unexport", // word
-		"uniwill", // hardware
-		"unmanaged", // word
-		"urandom", // linux
-		"usbhid", // kmod
-		"vcgencmd", // program
-		"vdev", "vdevs", // zfs
-		"vfat", // linux
-		"virtualisation", // british english
-		"wiplib", // name / abbr (WIP library)
-		"ycbcr", // hardware
-		"zstd", "zstdcat", // program / function
+		"aarch64",
+		"acpi",
+		"agenix",
+		"alsamixer",
+		"argstr",
+		"armstub",
+		"armstubs",
+		"attrset",
+		"attrsets",
+		"autoexpand",
+		"autologin",
+		"autoprune",
+		"autosnap",
+		"bindir",
+		"binfmt",
+		"blkdiscard",
+		"blockdev",
+		"bluetooth",
+		"bootable",
+		"bootloader",
+		"bootpart",
+		"broadcom",
+		"builtins",
+		"bwrap",
+		"cdetect",
+		"clevo",
+		"cmds",
+		"concat",
+		"conv",
+		"coreutils",
+		"cppflags",
+		"CWD",
+		"cykerway",
+		"darwin",
+		"datadir",
+		"dbus",
+		"debian",
+		"defconfig",
+		"defexpr",
+		"devtmpfs",
+		"dontUnpack",
+		"dropbear",
+		"dtoverlay",
+		"dtparam",
+		"ectory",
+		"eeprom",
+		"elif",
+		"enableRedistributableFirmware",
+		"ethernet",
+		"expandsz",
+		"extglob",
+		"extlinux",
+		"fanspeed",
+		"fetchurl",
+		"filesystems",
+		"firejail",
+		"firmwareLinuxNonfree",
+		"foldl",
+		"foldr",
+		"fstrim",
+		"fuser",
+		"fw_printenv",
+		"fw_setenv",
+		"gcroots",
+		"genkey",
+		"genkeytypes",
+		"getent",
+		"getsize64",
+		"getty",
+		"github",
+		"gnugrep",
+		"gnused",
+		"gnustep",
+		"gollenstede",
+		"gpio",
+		"gpiochip",
+		"gpiomem",
+		"gpioset",
+		"gptfdisk",
+		"hcloud",
+		"hetzner",
+		"HISTCONTROL",
+		"hugepages",
+		"ignoredups",
+		"ignorespace",
+		"initdb",
+		"inodes",
+		"ints",
+		"journalctl",
+		"Kconfig",
+		"KenjiTakahashi",
+		"keygen",
+		"lcurses",
+		"ldso32",
+		"leds",
+		"libblockdev",
+		"libexec",
+		"libgpiod",
+		"libobjc",
+		"libpulseaudio",
+		"libraspberrypi",
+		"libubootenv",
+		"libyaml",
+		"linux",
+		"lncurses",
+		"logind",
+		"luks",
+		"mkdir",
+		"mkenvimage",
+		"mkpasswd",
+		"mktemp",
+		"mountpoint",
+		"mtab",
+		"namei",
+		"namespacing",
+		"netns",
+		"niklas",
+		"nixos",
+		"nixpkgs",
+		"noatime",
+		"nodev",
+		"nodiscard",
+		"noexec",
+		"nofile",
+		"NOPASSWD",
+		"noprofile",
+		"nosuid",
+		"notrunc",
+		"ntfs",
+		"objc",
+		"ondemand",
+		"oneshot",
+		"openssh",
+		"optimise",
+		"overridable",
+		"overscan",
+		"pacmixer",
+		"partlabel",
+		"partprobe",
+		"passthru",
+		"passwordless",
+		"pipefail",
+		"pkgs",
+		"pname",
+		"posix",
+		"postgresql",
+		"poweroff",
+		"poweron",
+		"powersave",
+		"psqlSchema",
+		"pubkey",
+		"pulsemixer",
+		"pwauth",
+		"raidz",
+		"ramfs",
+		"raspberrypi",
+		"raspberrypifw",
+		"rbind",
+		"readlink",
+		"realpath",
+		"recvoptions",
+		"reexec",
+		"refreservation",
+		"resolv",
+		"robotnix",
+		"rootfs",
+		"rpiboot",
+		"rpool",
+		"rprivate",
+		"rtkit",
+		"ryantm",
+		"sanoid",
+		"sbabic",
+		"sendoptions",
+		"sgdisk",
+		"sgid",
+		"shopt",
+		"specialfs",
+		"specialisation",
+		"stdenv",
+		"stty",
+		"subgid",
+		"subuid",
+		"syncoid",
+		"sysfs",
+		"syslinux",
+		"syspkgs",
+		"sysrq",
+		"tccd",
+		"temproot",
+		"timefmt",
+		"tmpdir",
+		"tmpfiles",
+		"tmpfs",
+		"toor",
+		"toplevel",
+		"typecode",
+		"uart",
+		"uarts",
+		"uboot",
+		"udev",
+		"udptunnel",
+		"UEFI",
+		"unalias",
+		"unallow",
+		"unbootable",
+		"unexport",
+		"uniwill",
+		"unmanaged",
+		"urandom",
+		"usbhid",
+		"vcgencmd",
+		"vdev",
+		"vdevs",
+		"vfat",
+		"virtualisation",
+		"wiplib",
+		"ycbcr",
+		"zstd",
+		"zstdcat"
 	],
 }

@@ -18,7 +18,7 @@ zfs list -r "$1" -H -o name | while read dataset ; do
     # If most recent snaps get pruned here (target), the source will send them again. If they got pruned on the sending side first, then sync will be stuck.
     # Similarly, if the sender made a sync snap that is not related to this target but still ends up as the latest snap here for the same reasons, then the sender may delete that snap on its side once it no longer needs it for its intended purpose.
     # The former case only occurs when sync is interrupted for a long time, and even then is unlikely, the latter can only happen with direct sending to multiple targets.
-    # So an optional filter of safe latest snapshots may be supplied, and everything lese that's later than one of those will be discarded. This is slow to check, and may discard significant sync progress:
+    # So an optional filter of safe latest snapshots may be supplied, and everything else that's later than one of those will be discarded. This is slow to check, and may discard significant sync progress:
     if [[ $snapPrefix ]] ; then
         snapshots=$( zfs list -t snapshot -H -o name -S creation "$dataset" ) # This is quite slow, esp. if may snapshots exist.
         latest=${snapshots%%$'\n'*}

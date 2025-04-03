@@ -11,7 +11,7 @@
     installer = { url = "github:NiklasGollenstede/nixos-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.functions.follows = "functions"; };
     agenix = { url = "github:ryantm/agenix"; inputs.nixpkgs.follows = "nixpkgs"; inputs.home-manager.follows = "nixpkgs"; inputs.darwin.follows = "nixpkgs"; };
     systems.url = "github:nix-systems/default";
-    config.url = "github:NiklasGollenstede/nix-wiplib?dir=example/defaultConfig"; # "path:./example/defaultConfig"; # (The latter only works on each host after using this flake directly (not as dependency or another flake). The former effectively points to the last commit, i.e. it takes two commits to apply changes to the default config.)
+    config.url = "github:NiklasGollenstede/nix-wiplib?dir=example/defaultConfig"; # "path:./example/defaultConfig"; # (The latter only works with nix >= 2.26. The former effectively points to the last commit, i.e. it takes two commits to apply changes to the default config.)
 
 }; outputs = inputs@{ self, ... }: inputs.functions.lib.importRepo inputs ./. (repo@{ overlays, ... }: let
     lib = repo.lib.__internal__;

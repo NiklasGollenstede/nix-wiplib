@@ -16,7 +16,7 @@ in {
             Relative path in the top-level flake that (is to) contain encrypted `.age` files (and related `.pub`lic keys).
         ''; };
         rootKeyEncrypted = lib.mkOption { type = lib.types.nullOr (lib.types.strMatching "^[^/].*[^/]$"); default = null; example = "ssh/host/host@<name>"; description = ''
-            Name (/relative path) of the secret file that holds this host's private root decryption key. This can usually only be decrypted with an admin identity, usually during host installation.
+            Relative path in `.secretsDir` of the secret file that holds this host's private root decryption key. This can usually only be decrypted with an admin identity, usually during host installation.
         ''; };
         secretsPath = lib.mkOption { type = lib.types.path; readOnly = true; internal = true; };
     }; };

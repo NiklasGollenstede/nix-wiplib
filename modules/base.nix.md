@@ -48,9 +48,10 @@ in {
         environment.etc."machine-id".text = lib.mkDefault (builtins.substring 0 32 (builtins.hashString "sha256" "${config.networking.hostName}:machine-id")); # this works, but it "should be considered "confidential", and must not be exposed in untrusted environments" (not sure _why_ though)
         documentation.man.enable = lib.mkDefault config.documentation.enable;
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
+        nix.package = lib.mkIf (pkgs.nixVersions?nix_2_26 && lib.versionOlder pkgs.nix.version pkgs.nixVersions.nix_2_26.version) (lib.mkDefault pkgs.nixVersions.nix_2_26);
         nix.settings.ignore-try = lib.mkDefault true; # Use »--option ignore-try false« on the CLI to revert this.
         nix.settings.flake-registry = lib.mkDefault ""; # Disable the global (online) flake registry.
-        nix.package = lib.mkIf (pkgs.nixVersions?nix_2_20 && lib.versionOlder pkgs.nix.version pkgs.nixVersions.nix_2_20.version) (lib.mkDefault pkgs.nixVersions.nix_2_20); # https://github.com/NixOS/nix/issues/10815
+        nix.settings.allow-dirty-locks = lib.mkDefault true;
         environment.systemPackages = [ pkgs.nix-flake-update ];
         #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
@@ -61,8 +62,10 @@ in {
         systemd.services.rtkit-daemon = lib.mkIf (config.security.rtkit.enable) { serviceConfig.LogLevelMax = lib.mkDefault "warning"; }; # spams, and probably irrelevant
 
         boot.kernel.sysctl = {
-            "fs.inotify.max_user_instances" = lib.mkDefault 8192; # implicit default (Linux 6.6, 40GB) is 128
+            # implicit default (Linux 6.6, 40GB) is 128 (or 8192?)
+            "fs.inotify.max_user_instances" = lib.mkOptionDefault 524288;
             # "fs.inotify.max_user_watches" is set to min(1%RAM, 1mil) on Linux 5.12+
+            # "fs.inotify.max_user_watches" = lib.mkDefault 524288;
         };
 
         system.extraSystemBuilderCmds = lib.mkIf config.boot.initrd.enable ''
@@ -130,6 +133,8 @@ in {
             dates = lib.mkDefault "Sun *-*-* 03:15:00";
         };
         nix.settings = { keep-outputs = true; keep-derivations = true; }; # don't GC build-time dependencies
+
+        # TODO: gc should depend on upgrade: That will always keep a configuration that has can perform upgrades (i.e., has internet access).
 
         system.autoUpgrade = {
             enable = lib.mkDefault true; channel = null;
