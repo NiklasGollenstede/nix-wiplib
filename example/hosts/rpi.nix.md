@@ -55,8 +55,6 @@ in { preface = {
 
     services.getty.autologinUser = "root"; users.users.root.hashedPasswordFile = config.age.secrets."shadow/${"root"}".path; # »toor«
 
-    boot.kernelParams = [ "boot.shell_on_fail" ]; wip.base.panic_on_fail = false;
-
     wip.services.dropbear.enable = true;
     wip.services.dropbear.rootKeys = ''${lib.readFile "${inputs.self}/example/ssh-dummy-key.pub"}'';
     wip.services.dropbear.socketActivation = true;

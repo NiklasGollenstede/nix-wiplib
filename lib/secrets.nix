@@ -23,7 +23,7 @@ in {
 
         ageFiles = builtins.filter (lib.hasSuffix ".age") (if builtins.pathExists "${repoRoot}/${secretsDir}" then listDirRecursive "${repoRoot}" "${secretsDir}" else [ ]);
         hostInclusions = builtins.mapAttrs hostNeedsSecret hosts;
-        matching = file: inclusions: builtins.attrNames (lib.filterAttrs (_: exp: if builtins.isFunction exp then exp file else (builtins.match "(${secretsDir}/)?(${exp})(.age)?" file) != null) inclusions);
+        matching = file: inclusions: builtins.attrNames (lib.filterAttrs (_: exp: if builtins.isFunction exp then exp file else (builtins.match "(${secretsDir}/)?(${exp})([.]age)?" file) != null) inclusions);
         secrets = lib.genAttrs ageFiles (file: { publicKeys = (lib.remove null (map (name: getHostPubKey name hosts.${name}) (matching file hostInclusions))) ++ (matching file adminPubKeys); });
 
     in { apps = lib.fun.exportFromPkgs { inputs = { inherit (flakeInputs) nixpkgs agenix; } // inputs; what = pkgs: {

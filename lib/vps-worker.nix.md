@@ -231,7 +231,7 @@ in let vps-worker = ({
         };
 
     }) ({ ## Debugging
-        wip.base.panic_on_fail = false; boot.kernelParams = [ "boot.shell_on_fail" ];# ++ [ "console=ttyS0" ];
+        boot.kernelParams = [ "systemd.debug_shell" ]; # This may or may not, even in the initrd, enable the service (included with systemd) that opens a root shell on tty9.
         services.getty.autologinUser = "root"; # (better than a trivial root password)
 
     }) (lib.mkIf (!noFS) { ## Expand Partitions (local/rpool+swap)

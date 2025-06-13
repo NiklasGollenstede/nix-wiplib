@@ -36,8 +36,9 @@ The modules are inactive by default, and are, where possible, designed to be ind
 
 [`patches/`](./patches/) contains patches which are either applied to the flake's inputs in [`flake.nix`](./flake.nix) or to packages in one of the [`overlays/`](./overlays/).
 
-[`hosts/`](./hosts/) contains example host definitions.
-[`example/`](./example/) currently only contains this flake's [default config](./example/defaultConfig/) (see [Namespacing](#namespacing-in-nixos)).
+[`example/hosts/`](./example/hosts/) contains some example host definitions, and [`example/secrets/`](./example/secrets/) a suggested structure for secrets (that is used by some of the example hosts).
+[`example/`](./example/) further contains this flake's [default config](./example/defaultConfig/) (see [Namespacing](#namespacing-in-nixos)).
+Finally, there is a template with suggestions on how to structure your own flake that imports this one in [`example/template/`](./example/template/).
 
 
 ## `secrets` Module & App

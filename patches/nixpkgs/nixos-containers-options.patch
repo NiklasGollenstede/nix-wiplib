@@ -1,0 +1,52 @@
+diff --git a/nixos/modules/virtualisation/nixos-containers.nix b/nixos/modules/virtualisation/nixos-containers.nix
+index e5a0d37d6a9c..3d6db2c4ecdc 100644
+--- a/nixos/modules/virtualisation/nixos-containers.nix
++++ b/nixos/modules/virtualisation/nixos-containers.nix
+@@ -529,17 +529,9 @@ in
+             name,
+             ...
+           }:
+-          {
+-            options = {
+-              config = mkOption {
+-                description = ''
+-                  A specification of the desired configuration of this
+-                  container, as a NixOS module.
+-                '';
+-                type = lib.mkOptionType {
+-                  name = "Toplevel NixOS config";
+-                  merge =
+-                    loc: defs:
++          let
++            defs = options.config.definitionsWithLocations;
++            system =
+                     (import "${toString config.nixpkgs}/nixos/lib/eval-config.nix" {
+                       modules =
+                         let
+@@ -590,10 +582,25 @@ in
+                       # The system is inherited from the host above.
+                       # Set it to null, to remove the "legacy" entrypoint's non-hermetic default.
+                       system = null;
+-                    }).config;
++                    })
++            ;
++          in
++          {
++            options = {
++              config = mkOption {
++                description = ''
++                  A specification of the desired configuration of this
++                  container, as a NixOS module.
++                '';
++                type = lib.mkOptionType {
++                  name = "Toplevel NixOS config";
++                  merge =
++                    loc: defs: system.config;
+                 };
+               };
+
++              options = mkOption { default = system.options; readOnly = true; };
++
+               path = mkOption {
+                 type = types.path;
+                 example = "/nix/var/nix/profiles/per-container/webserver";

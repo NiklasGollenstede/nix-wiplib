@@ -27,7 +27,6 @@ in {
             if inputs?self.outputs.outPath then { self = inputs.self // { outPath = inputs.self.outputs.outPath; }; } else { } # see inputs.functions.lib.imports.importRepo
         )); };
         selfInputName = lib.mkOption { description = "name of »config.${prefix}.base.includeInputs.self« flake"; type = lib.types.str; default = "nixos-config"; };
-        panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // byDefault; # It's stupidly hard to remove items from lists ...
         showDiffOnActivation = lib.mkEnableOption "showing a diff compared to the previous system on activation of this new system (generation)" // byDefault;
         autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // ifKnowsSelf;
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // byDefault;
@@ -42,20 +41,27 @@ in {
     in lib.mkIf cfg.enable (lib.mkMerge [ (
         lib.optionalAttrs (options.nix.channel?enable) { nix.channel.enable = lib.mkDefault false; }
     ) ({
-        boot.initrd.systemd.enable = lib.mkIf (!config.boot.isContainer) (lib.mkDefault true);
         users.mutableUsers = false; users.allowNoPasswordLogin = true; # Don't babysit. Can roll back or redeploy.
         networking.hostId = lib.mkDefault (builtins.substring 0 8 (builtins.hashString "sha256" config.networking.hostName));
-        environment.etc."machine-id".text = lib.mkDefault (builtins.substring 0 32 (builtins.hashString "sha256" "${config.networking.hostName}:machine-id")); # this works, but it "should be considered "confidential", and must not be exposed in untrusted environments" (not sure _why_ though)
+        environment.etc."machine-id".text = lib.mkDefault (builtins.substring 0 32 (builtins.hashString "sha256" "${config.networking.hostName}:machine-id")); # Needs to exist (but may be empty) for systemd not to consider this a fresh installation ("first boot"). Also, is used as identifier in logs (vs. containers/VMs). This works, but it "should be considered "confidential", and must not be exposed in untrusted environments". Guess containers/VMs could send fake host system logs?
         documentation.man.enable = lib.mkDefault config.documentation.enable;
+
+        ## Nix
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
         nix.package = lib.mkIf (pkgs.nixVersions?nix_2_26 && lib.versionOlder pkgs.nix.version pkgs.nixVersions.nix_2_26.version) (lib.mkDefault pkgs.nixVersions.nix_2_26);
-        nix.settings.ignore-try = lib.mkDefault true; # Use »--option ignore-try false« on the CLI to revert this.
+        nix.settings.experimental-features = [ "nix-command" "flakes" ]; # We will probably not ever get rid of these flags.
+        programs.git.enable = lib.mkDefault true; # Necessary as external dependency when working with flakes.
+        nix.settings.ignore-try = lib.mkDefault true; # »nix --debugger« will not break on errors in »try« branches. Use »--option ignore-try false« on the CLI to revert this.
         nix.settings.flake-registry = lib.mkDefault ""; # Disable the global (online) flake registry.
-        nix.settings.allow-dirty-locks = lib.mkDefault true;
-        environment.systemPackages = [ pkgs.nix-flake-update ];
+        nix.settings.allow-dirty-locks = lib.mkDefault true; # Allow locking (and having locked) local inputs. Requires external tooling opr the user to ensure that the locked inputs are present in the store.
+        nix.settings.tarball-ttl = lib.mkDefault 0; # Flakes('s inputs) should only be updated when asked explicitly, but then always.
         #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
+
+        ## Boot
+        boot.initrd.systemd.enable = lib.mkIf (!config.boot.isContainer) (lib.mkDefault true);
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
-        boot.kernelParams = [ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail"); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails.
+        boot.kernelParams = lib.mkBefore [ "panic=10" ]; # On panic, show error for 10 seconds, then reboot. (»mkBefore« so that added parameters will override this.)
+        #boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
         systemd.extraConfig = "StatusUnitFormat=name"; boot.initrd.systemd.extraConfig = "StatusUnitFormat=name"; # Show unit names instead of descriptions during boot.
         services.getty.helpLine = lib.mkForce "";
@@ -94,10 +100,6 @@ in {
 
 
     }) (lib.mkIf (cfg.includeInputs != { }) { # flake things
-
-        # "input" to the system build is definitely also a nix version that works with flakes:
-        nix.settings.experimental-features = [ "nix-command" "flakes" ]; # apparently, even nix 2.8 (in nixos-22.05) needs this
-        environment.systemPackages = [ pkgs.git ]; # necessary as external dependency when working with flakes
 
         # »inputs.self« does not have a name (that is known here), so just register it as »/etc/nixos/« system config:
         environment.etc.nixos = lib.mkIf (cfg.includeInputs?self) (lib.mkDefault { source = "/run/current-system/config"; }); # (use this indirection to prevent every change in the config to necessarily also change »/etc«)
@@ -176,6 +178,12 @@ in {
 
         # (almost) Free Convenience:
         ${prefix}.profiles.bash.enable = lib.mkIf (cfg.bashInit) true;
+
+
+    }) ({ ## Legacy stuff
+
+        boot.kernelParams = [ "boot.panic_on_fail" ]; # This only works with the legacy stage 1. Shouldn't use that either way.
+
 
     }) ]);
 

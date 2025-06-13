@@ -16,15 +16,21 @@ in {
 
     options.${prefix} = { profiles.bash = {
         enable = lib.mkEnableOption "fairly objectively better defaults for interactive bash shells";
+        functions = lib.mkOption {
+            type = lib.types.attrsOf lib.types.str; default = { }; example = { "my-func" = ''echo "Hello, world!"''; };
+            description = ''Additional functions to be added to the bash shell. The attribute name becomes the function name, and the value the body.'';
+        };
     }; };
 
 
     config = lib.mkIf cfg.enable (lib.mkMerge [ ({
 
-        environment.shellAliases = {
-
+        ${prefix}.profiles.bash.functions = {
             ## »with« doesn't seem to be a common unix command yet, and it makes sense here: with package(s) => do stuff
-            "with" = "function with { local supportInline=1 ; source ${../../pkgs/scripts/with.sh} ; } ; unalias with ; complete -D with ; with";
+            "with" = "local supportInline=1 ; source ${../../pkgs/scripts/with.sh}";
+        };
+
+        environment.shellAliases = {
 
             ls = "ls --color=auto"; # (default)
             l  = "ls -alhF"; # (added F)
@@ -70,6 +76,10 @@ in {
             if command -v ble-bind &>/dev/null ; then
                 ble-bind -f 'C-RET' 'accept-line' ; ble-bind -f 'S-RET' 'newline' # Shift+Enter -> new line ; Ctrl+Enter -> submit (this requires the terminal to send escape sequences for those key combinations)
             fi
+
+            ${builtins.concatStringsSep "\n" (
+                lib.mapAttrsToList (k: v: if v == null then "" else "function ${k} {\n${v}\n}") cfg.functions
+            )}
         '';
         /* programs.bash.promptInit = lib.mkAfter ''
             if command -v ble-bind &>/dev/null ; then
