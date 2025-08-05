@@ -1,4 +1,4 @@
-set -o pipefail -u
+set -o pipefail -u ; PATH=@{pkgs.coreutils}/bin
 
 description="Updates the NixOS configuration running on a host via SSH.
 "
@@ -6,7 +6,8 @@ argvDesc='[sshHostname=$(hostname)] [verb=switch] [...nix options]'
 declare -g -A allowedArgs=(
     [--name=<string>]="Optional name of the »nixosConfigurations« attribute to use as the target host's configuration. Uses the output of »hostname« run on the target, if not supplied."
     [--remote-eval]="Perform the evaluation on the target system after using »push-flake«"
-    [--spec=<string>]='"Specialisation" to switch to.'
+    #[--system=<store-path>]="Skip evaluation. If this path ends in ».drv«, realize (build) it, otherwise use it directly. With »--remove-eval«, assume the path to exist on the remote already, otherwise copy it there."
+    [--spec=<string>]='"Specialisation" to switch to. Supply empty string to switch back to the default specialisation. Defaults to the current specialisation, if any. (Untested.)'
 )
 details="
 This script uses Nix locally (and when exported by a flake that flake's nixpkgs' Nix version) to evaluate the host configuration, then pushes the build instructions (derivation files) to the target, and builds (derives) them there, before applying them according to »verb« (this means that the command fails quickly and without traces when the evaluation fails, but copying derivation files, if many derivations have changed, can be oddly slow).
@@ -16,11 +17,12 @@ This script uses Nix locally (and when exported by a flake that flake's nixpkgs'
 Any extra arguments are passed to the nix eval and build commands, so something like »-- --debugger --keep-going« can be useful.
 "
 
-PATH=@{pkgs.coreutils}/bin:@{pkgs.openssh}/bin:@{pkgs.git}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:@{pkgs.nix}/bin
+PATH=$PATH:@{pkgs.git}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:@{pkgs.openssh}/bin:@{pkgs.nix}/bin
 
-generic-arg-parse "$@" || exit
-generic-arg-help "update-host" "$argvDesc" "$description" "$details" || exit # requires coreutils
+exitCodeOnError=2 shortOptsAre=error generic-arg-parse "$@" || exit
+shortOptsAre=error generic-arg-help  "update-host" "$argvDesc" "$description" "$details" || exit # requires coreutils
 exitCode=2 generic-arg-verify || exit
+
 #if [[ ${argv[0]:-} == -* ]] ; then echo 'Hostname may not start with a dash' >&2 ; exit 1 ; fi
 if [[ ${argv[0]:-} == -* ]] ; then argv=( '' "${argv[@]}" ) ; exit 1 ; fi
 if [[ ${argv[1]:-} == -* ]] ; then argv=( "${argv[0]:-}" '' "${argv[@]:1}" ) ; fi
@@ -39,7 +41,6 @@ else
 fi
 
 ssh -q -t "$targetHost" -- "$( function remote { set -o pipefail -u
-    drvPath=$1 ; shift ; predicate=$1 ; shift ; spec=$1 ; shift
     function version-gr-eq { printf '%s\n%s' "$1" "$2" | LC_ALL=C sort -C -V -r ; }
     output= ; if version-gr-eq "$( nix --version | grep -Poe '\d+.*' )" '2.14' ; then output='^out' ; fi
     if [[ $predicate == build ]] ; then
@@ -48,11 +49,19 @@ ssh -q -t "$targetHost" -- "$( function remote { set -o pipefail -u
     else
         systemPath=$( nix --extra-experimental-features nix-command build --keep-going --no-link --print-out-paths "${drvPath/.drv/.drv$output}" "$@" ) || return
     fi
+    prevSystem=$( readlink /run/current-system )
     sudo= ; if [[ ${UID:-0} != "$( stat -c %u /nix 2>/dev/null || echo 0 )" ]] ; then sudo=sudo ; fi
+    suffix= ; if ! [[ ${args[spec]:-x} == x && ${args[spec]-x} == '' ]] ; then # not explicitly »--spec=''«
+        if [[ ! ${args[spec]:-} && $prevSystem == */specialisation/* ]] ; then
+            args[spec]=${prevSystem##*/specialisation/}
+        fi ; if [[ ${args[spec]:-} ]] ; then
+            suffix=specialisation/${args[spec]}
+        fi
+    fi
     $sudo nix-env -p /nix/var/nix/profiles/system --set "$systemPath" || return
     if [[ $predicate == activate ]] ; then
-        $sudo "$systemPath"/"${spec:+specialisation/"$spec"/}"activate || return
+        $sudo "$systemPath"/"$suffix"/activate || return
     else
-        $sudo "$systemPath"/"${spec:+specialisation/"$spec"/}"/bin/switch-to-configuration "$predicate" || return
+        $sudo "$systemPath"/"$suffix"/bin/switch-to-configuration "$predicate" || return
     fi
-} ; declare -f remote ) ; remote $( printf ' %q' "$drvPath" "$predicate" "${args[spec]:-}" "${argv[@]:2}" )" || exit
+} ; declare -f remote ; declare -p drvPath predicate args ) ; remote" || exit

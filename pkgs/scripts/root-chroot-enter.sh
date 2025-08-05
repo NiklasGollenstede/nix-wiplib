@@ -40,6 +40,14 @@ if test $doActivate ; then
     @{pkgs.coreutils}/bin/touch $root/activated || exit
 fi
 
+# Called with sudo for interactive sessions, one ends up with a pts (and thus /dev/std{in,out,err}) owned by root. Fix that:
+if [[ ${SUDO_USER:-} ]] ; then
+    stdin=$( @{pkgs.coreutils}/bin/realpath /dev/stdin )
+    if [[ $stdin == /dev/pts/* && $( @{pkgs.coreutils}/bin/stat -c '%U' "$stdin" ) == root ]] ; then
+        @{pkgs.coreutils}/bin/chown "$SUDO_USER" "$stdin" || true
+    fi
+fi
+
 if (( $# > 0 )) ; then
     unset NIXOS_CHROOT_SSH_ENTER_OPPORTUNISTIC
     exec @{pkgs.coreutils}/bin/chroot -- $root "$@"

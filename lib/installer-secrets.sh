@@ -1,24 +1,25 @@
 
+declare-flag install-system decryption-identity "" 'Explicit »--identity« (admin private key) to use to decrypt the root key of the new host.'
 declare-flag install-system no-root-key "" 'Skip decryption and installation of the hosts root key (`config.wip.services.secrets.rootKeyEncrypted` to `builtins.head config.age.identityPaths`), even if the `secrets` module is enabled and configured.'
 
 function prepare-installer--secrets {
     if [[ ! @{config.wip.services.secrets.enable:-} || ! @{config.wip.services.secrets.rootKeyEncrypted:-} || ${args[no-root-key]:-} ]] ; then return ; fi
-    if [[ ${args[no-vm]:-} && "$(id -u)" == '0' && -e /tmp/shared/ssh_host_ed25519_key ]] ; then # inside vm
+    if [[ ${args[no-vm]:-} && "$(id -u)" == '0' && -e /tmp/shared/rootKeyDecrypted ]] ; then # inside vm
         rootKeyDir=/tmp/shared
     else
         rootKeyDir=$( mktemp -d ) && prepend_trap 'rm -rf $rootKeyDir' EXIT || exit
-        @{native.nix}/bin/nix --extra-experimental-features 'nix-command flakes' run @{inputs.self}'#'secrets -- --decrypt @{config.wip.services.secrets.secretsDir:?}/@{config.wip.services.secrets.rootKeyEncrypted:?}.age | install /dev/stdin -m 600 $rootKeyDir/ssh_host_ed25519_key || exit
+        @{native.nix}/bin/nix --extra-experimental-features 'nix-command flakes' run @{inputs.self}'#'secrets -- ${args[decryption-identity]:+ --identity "${args[decryption-identity]}" } decrypt::@{config.wip.services.secrets.secretsDir:?}/@{config.wip.services.secrets.rootKeyEncrypted:?}.age | install /dev/stdin -m 600 $rootKeyDir/rootKeyDecrypted || exit
         args[vm-shared]=$rootKeyDir
     fi
 }
 
 function post-mount--secrets {
     if [[ ! @{config.wip.services.secrets.enable:-} || ! @{config.wip.services.secrets.rootKeyEncrypted:-} || ${args[no-root-key]:-} ]] ; then return ; fi
-    if [[ ! ${rootKeyDir:-} || ! -e $rootKeyDir/ssh_host_ed25519_key ]] ; then echo "Root key is missing: »$rootKeyDir«" >&2 ; \return 1 ; fi
-    #local target=/etc/ssh/ssh_host_ed25519_key ; if [[ -L $target ]] ; then target=$( readlink @{config.system.build.toplevel}$target ) ; fi
+    if [[ ! ${rootKeyDir:-} || ! -e $rootKeyDir/rootKeyDecrypted ]] ; then echo "Root key is missing: »$rootKeyDir«" >&2 ; \return 1 ; fi
+    #local target=/etc/ssh/rootKeyDecrypted ; if [[ -L $target ]] ; then target=$( readlink @{config.system.build.toplevel}$target ) ; fi
     local target=@{config.age.identityPaths!head:?}
     mkdir -p $mnt/$( dirname "$target" )
-    ( ${_set_x:-:} ; install -m 600 -o root -g root -T $rootKeyDir/ssh_host_ed25519_key $mnt/"$target" ) || exit
+    ( ${_set_x:-:} ; install -m 600 -o root -g root -T $rootKeyDir/rootKeyDecrypted $mnt/"$target" ) || exit
 }
 
 copy-function prompt-for-user-passwords{,--before-secrets}

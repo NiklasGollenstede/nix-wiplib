@@ -52,7 +52,8 @@ in { preface = {
 
     services.getty.autologinUser = "root"; users.users.root.hashedPasswordFile = config.age.secrets."shadow/${"root"}".path; # »toor«
 
-    boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
+    systemd.services."serial-getty@".conflicts = [ "debug-shell.service"];
+    boot.kernelParams = [ "rd.systemd.debug_shell=ttyS0" "systemd.debug_shell=ttyS0" ]; # in the initrd this works fine, in stage 2 it does not work (on ttyS0?)
 
     wip.services.dropbear.enable = true; # root:toor
     #services.openssh.enable = true; # (needs extra config to allow root password login)

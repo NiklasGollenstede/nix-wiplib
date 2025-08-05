@@ -93,11 +93,8 @@ in {
             "nix/nixpkgs/nixos".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/nixos"; # also import <nixpkgs/nixos>
         });
 
-        nix.settings.nix-path = lib.mkIf (cfg.legacy && !(config.nix.channel?enable && config.nix.channel.enable)) [
-            # This seems to take precedence over »nix.nixPath«, and it is is set if »!config.nix.channel.enable«.
-            "nixpkgs=/etc/nix/nixpkgs" # (here, this could directly point to the nix file)
-        ];
-        nix.nixPath = lib.mkIf (cfg.legacy && (config.nix.channel?enable && config.nix.channel.enable)) ([
+        # Only actually activate it if the legacy search path is enabled:
+        nix.nixPath = lib.mkIf (cfg.legacy && config.nix.channel.enable) (lib.mkDefault [ # (it's a list, so we can only replace anything by replacing the whole thing at a higher priority)
             "nixpkgs=/etc/nix/nixpkgs" # (use indirection so that all open shells update automatically)
             "nixos-config=/etc/nixos/configuration.nix"
             "/nix/var/nix/profiles/per-user/root/channels"

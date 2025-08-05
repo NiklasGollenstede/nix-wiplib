@@ -7,6 +7,7 @@
     # To update »./flake.lock«: $ nix flake update
     nixpkgs = { url = "github:NixOS/nixpkgs/nixos-25.05"; };
     nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; };
+    nixos-images = { url = "github:nix-community/nixos-images"; inputs.nixos-stable.follows = "nixpkgs"; inputs.nixos-unstable.follows = "nixpkgs"; };
     functions = { url = "github:NiklasGollenstede/nix-functions"; inputs.nixpkgs.follows = "nixpkgs"; };
     installer = { url = "github:NiklasGollenstede/nixos-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.functions.follows = "functions"; };
     agenix = { url = "github:ryantm/agenix"; inputs.nixpkgs.follows = "nixpkgs"; inputs.home-manager.follows = "nixpkgs"; inputs.darwin.follows = "nixpkgs"; };

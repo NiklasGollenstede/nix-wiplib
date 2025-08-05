@@ -3,7 +3,8 @@
 
 The idea of this repo / flake is that whenever I have a Nix function, NixOS Module, nixpkgs package/overlay, related bash script, or combination of those that I need in more than one project, I first put it here so that it can be shared between them.
 
-Eventually I may decide to move parts of this into their own flake repository, but as long as they live here, APIs are not necessarily stable.
+Eventually I may decide to move parts of this repo into their own flake repositories.
+As long as they live here, APIs are not necessarily stable.
 
 
 ## Notables
@@ -12,6 +13,8 @@ Eventually I may decide to move parts of this into their own flake repository, b
 * [**Dropbear SSH Server**](./modules/services/dropbear.nix.md): A simple service definition for using dropbear as (main system) SSH server, as a much lighter (but also less feature-rich) alternative of OpenSSH, especially for embedded systems.
 * [**Hetzner Cloud VPS Config**](./modules/hardware/hetzner-vps.nix.md): "Device" specific configuration and [fully automated deployment](./modules/hardware/hetzner-deploy-vps.sh) for Hetzner's cloud VPS VMs.
 * [**VPS Workers**](./lib/vps-worker.nix.md): (Experimental) definitions for on-demand spawnable workers (for CPU workloads like Nix builds) based on the above.
+* [**Ephemeral `kexec` Systems**](./modules/hardware/kexec.nix.md): Deploy complete software systems including kernel as easily as VMs, but run them directly on any hardware device without leaving any persistent traces.
+* [**`age-of-nix` Secrets Management**](#age-of-nix-secrets): A simpler API to manage `age` secrets for NixOS hosts (than `agenix`).
 
 
 ## Graduates
@@ -23,16 +26,16 @@ Former residents of this repository that now live on their own:
 
 ## Repo Layout
 
-This is a nix flake repository, so [`flake.nix`](./flake.nix) is the entry point and export mechanism for almost everything.
+This Nix Flake repository is laid out and exported as described in [this template](https://github.com/NiklasGollenstede/nix-functions/blob/master/example/template/README.md).
 
 [`lib/`](./lib/) defines new library functions which are exported as the `lib` flake output. Other Nix files in this repo use them as `(lib = inputs.self.lib.__internal__).wip`.
 
 [`modules/`](./modules/) contains NixOS configuration modules. Added options' names start with `wip.` (or a custom prefix, see [Namespacing](#namespacing-in-nixos)).
-The modules are inactive by default, and are, where possible, designed to be independent from each other and the other things in this repo. Some though do have dependencies on added or modified packages, or other modules in the same directory.
-[`modules/default.nix`](./modules/default.nix) exports an attr set of the modules defined in the individual files, which is also what is exported as `flake#outputs.nixosModules` and merged as `flake#outputs.nixosModule`.
+The modules are inactive by default, and are, where possible, designed to be independent from each other and the other things in this repo.
+Some though do have dependencies on added or modified packages, or other modules in the same directory.
 
-[`overlays/`](./overlays/) contains nixpkgs overlays. Some modify packages from `nixpkgs`, others add packages not in there (yet).
-[`overlays/default.nix`](./overlays/default.nix) exports an attr set of the overlays defined in the individual files, which is also what is exported as `flake#outputs.overlays` and merged as `flake#outputs.overlay`. Additionally, the added or modified packages are exported as `flake#outputs.packages.<arch>.*`.
+[`overlays/`](./overlays/) contains nixpkgs overlays overlays modifying existing packages from `nixpkgs`.
+[`pkgs/`](./pkgs/) contains new package definitions.
 
 [`patches/`](./patches/) contains patches which are either applied to the flake's inputs in [`flake.nix`](./flake.nix) or to packages in one of the [`overlays/`](./overlays/).
 
@@ -41,11 +44,12 @@ The modules are inactive by default, and are, where possible, designed to be ind
 Finally, there is a template with suggestions on how to structure your own flake that imports this one in [`example/template/`](./example/template/).
 
 
-## `secrets` Module & App
+## `age-of-nix` Secrets
 
-The `secrets` module and app are (currently) a slim wrapper around `agenix`. It's main advantage is that it requires no central list assigning secrets.
+The [`wip.services.secrets`](./modules/services/secrets.nix) module is a slim wrapper around the `agenix` module, and [`age-of-nix` / `nix run .#secrets`](./pkgs/scripts/age-of-nix.sh) is an extended reimplementation of the `agenix` tool.
+Their main advantage is that they requires no central list assigning secrets, and they have an overall streamlined API.
 
-Merge this into your flakes outputs:
+To use them, merge this into your flakes outputs:
 ```nix
     (inputs.wiplib.lib.mkSecretsApp {
         inherit inputs; adminPubKeys = { "${builtins.readFile ./...pub}" = ".*"; }; # ...
@@ -59,17 +63,17 @@ And add something like this to your hosts' definitions:
     };
     users.users.root.hashedPasswordFile = config.age.secrets."shadow/${"root"}".path; # use runtime-decrypted secret
 ```
-Then generate the master keys (SSH host keys) for each host:
+Then generate the root decryption (and SSH host) key for each host:
 ```bash
-for host in ... ; do nix run .#secrets -- -s ssh/host/host@$host ; done
+nix run .#secrets -- --genkey-ssh ::ssh/host/host@{host1,host2,...}
 ```
 And generate the actual secrets you want:
 ```bash
-nix run .#secrets -- -p shadow/root # prompts for and then hashes and encrypts a password (mkpasswd)
-nix run .#secrets -- -s ssh/service/$remoteUser@$thisHost # generates an SSH key pair, encrypting the private key and keeping the .pub
-nix run .#secrets -- -w wg/wgX@$thisHost # generates a WireGuard key pair, encrypting the private key and keeping the .pub
-nix run .#secrets -- -e ... # opens an editor to create a new or edit an existing secret
-nix run .#secrets -- -r # re-encrypts each secret to be available for (decryption with the keys of) all hosts that »include« them
+nix run .#secrets -- --genkey-mkpasswd shadow/root # prompts for and then hashes and encrypts a password (mkpasswd)
+nix run .#secrets -- --genkey-ssh ssh/service/$remoteUser@$thisHost # generates an SSH key pair, encrypting the private key and keeping the .pub
+nix run .#secrets -- --genkey-wg wg/wgX@$thisHost # generates a WireGuard key pair, encrypting the private key and keeping the .pub
+nix run .#secrets -- --edit ... # opens an editor to create a new or edit an existing secret
+nix run .#secrets -- --rekey ... # re-encrypts each listed secret to be available for (decryption with the keys of) all hosts that »include« them
 ```
 
 
@@ -113,14 +117,3 @@ Embedding the source code "file" within a MarkDown file emphasizes the importanc
 Having the documentation right next to the code should also help against documentation rot.
 
 Technically, Nix (and most other code files) don't need to have any specific file extension. By embedding the MarkDown header in a block comment, the file can still be a valid source code file, while the MarkDown header ending in a typed code block ensures proper syntax highlighting of the source code in editors or online repos.
-
-
-## Notepad
-
-### `nix repl`
-
-```nix
-pkgs = import <nixpkgs> { }
-:lf . # load CWD's flake's outputs as variables
-pkgs = nixosConfigurations.target.pkgs
-```

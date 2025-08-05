@@ -1,22 +1,22 @@
-set -o pipefail -u
+set -o pipefail -u ; PATH=@{pkgs.coreutils}/bin
 
 description="Pushes a Nix »flake« (default: .) and its local inputs to a remote »target« host's /nix/store.
 "
 argvDesc='target [flake]'
 declare -g -A allowedArgs=(
     [--types=indirect,path,git+ssh]="The types of input flakes that will be pushed. Should include all types that the remote won't be able to pull itself."
-    [--register[=<name>]]="Register the flake in the target's (user) flake registry as »name«, or the name of the flake directory as inferred from »\$flake«. The »\$target« has to be an SSH [user@]hostname/IP. Specifically, this (re-)places an entry »from:{type:indirect,id:\$name},to:<pushed>« in »\$target:.config/nix/registry.json«."
+    [-r, --register[=<name>]]="Register the flake in the target's (user) flake registry as »name«, or the name of the flake directory as inferred from »\$flake«. The »\$target« has to be an SSH [user@]hostname/IP. Specifically, this (re-)places an entry »from:{type:indirect,id:\$name},to:<pushed>« in »\$target:.config/nix/registry.json«."
 )
 details="
 »target« can be a plain (SSH) [user@]hostname/IP or any valid Nix store URL.
 »flake« should be a local filesystem path. It can also be a »git+file://«-URL, in which case »dir« is the only supported parameter. Defaults to ».«.
 "
 
-generic-arg-parse "$@" || exit
-generic-arg-help "push-flake" "$argvDesc" "$description" "$details" || exit
-exitCode=2 generic-arg-verify || exit
+exitCodeOnError=2 shortOptsAre=flags generic-arg-parse "$@" || exit
+shortOptsAre=flags generic-arg-help "push-flake" "$argvDesc" "$description" "$details" || exit
+exitCodeOnError=2 generic-arg-verify || exit
 
-targetStore=${argv[0]:?}
+targetStore=${argv[0]:?The »target« system/store is a required argument.}
 if [[ $targetStore != *://* ]] ; then
     targetStore='ssh://'$targetStore
 elif [[ ${args[register]:-} ]] ; then
@@ -28,7 +28,7 @@ if [[ $flakeSpec == git+file:///* ]] ; then
     flakeLock=${flakeSpec##git+file://}
     flakeLock=${flakeLock/?dir=//}/flake.lock
 else
-    flakeSpec=$( @{pkgs.coreutils}/bin/realpath "$flakeSpec" ) || exit
+    flakeSpec=$( realpath -- "$flakeSpec" ) || exit
     flakeSpec=$( while true ; do # (this is how nix behaves when passed any type of (non-URL) path)
     	if [[ -e flake.nix ]] ; then echo "$PWD" ; break ; fi
         cd .. ; if [[ $PWD == / ]] ; then echo 'Unable to locate a flake.nix in (parent of) provided path' >&2 ; exit 2 ; fi
@@ -61,7 +61,7 @@ printf %s ${storePaths[0]}
 if [[ ${args[register]:-} ]] ; then
     if [[ ${args[register]:-} == 1 ]] ; then args[register]=$( basename "$( dirname "$flakeLock" )" ) ; fi
 
-    ssh -q -t "${argv[0]:?}" -- "$( function remote { set -o pipefail -u
+    @{pkgs.openssh}/bin/ssh -q -t "${argv[0]:?}" -- "$( function remote { set -o pipefail -u
         jq=$1 ; shift ; path=$1 ; shift ; name=$1 ; shift ; args=( --arg path "$path" --arg name "$name" )
         if ! $jq --version &>/dev/null ; then jq=$( nix --extra-experimental-features 'nix-command flakes' build nixpkgs#jq^bin --no-link --print-out-paths )/bin/jq ; fi # fallback for e.g. cross-arch
         if [[ -e .config/nix/registry.json ]] ; then reg=$(<.config/nix/registry.json) ; else reg='{ "version": 2, "flakes": [ ] }' ; fi

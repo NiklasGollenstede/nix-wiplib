@@ -21,24 +21,19 @@ in {
         enable = lib.mkEnableOption "saner defaults";
         includeInputs = lib.mkOption { description = "The system's build inputs, to be included in the flake registry, and on the »NIX_PATH« entry, such that they are available for self-rebuilds and e.g. as »pkgs« on the CLI."; type = lib.types.attrsOf lib.types.anything; apply = lib.filterAttrs (k: v: v != null); default = let
             inputs = moduleArgs.inputs or config._module.args.inputs;
-        in ((
-            if config.boot.isContainer then builtins.removeAttrs inputs [ "self" ] else inputs # avoid changing (and thus restarting) the containers on every trivial change
-        ) // (
-            if inputs?self.outputs.outPath then { self = inputs.self // { outPath = inputs.self.outputs.outPath; }; } else { } # see inputs.functions.lib.imports.importRepo
-        )); };
+        in (
+            if (!config.nix.enable) then { }
+            else if config.boot.isContainer then builtins.removeAttrs inputs [ "self" ] # avoid changing (and thus restarting) the containers on every trivial change
+            else if inputs?self.outputs.outPath then inputs // { self = inputs.self // { outPath = inputs.self.outputs.outPath; }; } # see inputs.functions.lib.imports.importRepo
+            else { }
+        ); };
         selfInputName = lib.mkOption { description = "name of »config.${prefix}.base.includeInputs.self« flake"; type = lib.types.str; default = "nixos-config"; };
         showDiffOnActivation = lib.mkEnableOption "showing a diff compared to the previous system on activation of this new system (generation)" // byDefault;
         autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // ifKnowsSelf;
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // byDefault;
     }; };
 
-    imports = lib.optional ((builtins.substring 0 5 inputs.nixpkgs.lib.version) <= "22.05") (lib.fun.overrideNixpkgsModule "misc/extra-arguments.nix" { } (old: { config._module.args.utils = old._module.args.utils // {
-        escapeSystemdPath = s: let n = builtins.replaceStrings [ "/" "-" " " ] [ "-" "\\x2d" "\\x20" ] (lib.removePrefix "/" s); in if lib.hasPrefix "." n then "\\x2e" (lib.substring 1 (lib.stringLength (n - 1)) n) else n; # (a better implementation has been merged in 22.11)
-    }; }));
-
-    config = let
-
-    in lib.mkIf cfg.enable (lib.mkMerge [ (
+    config = lib.mkIf cfg.enable (lib.mkMerge [ (
         lib.optionalAttrs (options.nix.channel?enable) { nix.channel.enable = lib.mkDefault false; }
     ) ({
         users.mutableUsers = false; users.allowNoPasswordLogin = true; # Don't babysit. Can roll back or redeploy.
@@ -50,11 +45,11 @@ in {
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
         nix.package = lib.mkIf (pkgs.nixVersions?nix_2_26 && lib.versionOlder pkgs.nix.version pkgs.nixVersions.nix_2_26.version) (lib.mkDefault pkgs.nixVersions.nix_2_26);
         nix.settings.experimental-features = [ "nix-command" "flakes" ]; # We will probably not ever get rid of these flags.
-        programs.git.enable = lib.mkDefault true; # Necessary as external dependency when working with flakes.
+        programs.git.enable = lib.mkIf config.nix.enable (lib.mkDefault true); # Necessary as external dependency when working with flakes.
         nix.settings.ignore-try = lib.mkDefault true; # »nix --debugger« will not break on errors in »try« branches. Use »--option ignore-try false« on the CLI to revert this.
         nix.settings.flake-registry = lib.mkDefault ""; # Disable the global (online) flake registry.
         nix.settings.allow-dirty-locks = lib.mkDefault true; # Allow locking (and having locked) local inputs. Requires external tooling opr the user to ensure that the locked inputs are present in the store.
-        nix.settings.tarball-ttl = lib.mkDefault 0; # Flakes('s inputs) should only be updated when asked explicitly, but then always.
+        nix.settings.tarball-ttl = lib.mkDefault 0; # Flakes('s inputs) should only be updated when asked explicitly, but then always. ("0 forces Nix to always check")
         #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
 
         ## Boot
@@ -78,6 +73,7 @@ in {
             ln -sT ${builtins.unsafeDiscardStringContext config.system.build.bootStage1} $out/boot-stage-1.sh # (this is super annoying to locate otherwise)
         ''; # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)
 
+        wip.base.showDiffOnActivation = lib.mkIf (!config.nix.enable) (lib.mkDefault true);
         system.activationScripts.diff-systems = lib.mkIf cfg.showDiffOnActivation { text = ''
             if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix && $(realpath /run/current-system) != "$systemConfig" ]] ; then
                 ${pkgs.nvd}/bin/nvd --nix-bin-dir=$systemConfig/sw/bin diff /run/current-system "$systemConfig"
@@ -165,7 +161,7 @@ in {
             cd "$flakePath" || exit
 
             # This (implicitly passing »--flake«) requires nix.version > 2.18:
-            nix --extra-experimental-features 'nix-command flakes' flake update ${/* lib.escapeShellArgs (defaults are not split properly) */ toString config.system.autoUpgrade.flags} || failed=$?
+            nix --extra-experimental-features 'nix-command flakes' --option-flake-registry 'path:/etc/nix/registry.json' flake update ${/* lib.escapeShellArgs (defaults are not split properly) */ toString config.system.autoUpgrade.flags} || failed=$?
             # (Since all inputs to the system flake are linked as system-level flake registry entries, even "indirect" references that don't really exist on the target can be "updated" (which keeps the same hash but changes the path to point directly to the nix store).)
             if [[ ''${failed:-} ]] ; then echo >&2 'Updating (some) inputs failed' ; fi
         '') (lib.mkAfter ''

@@ -1,8 +1,8 @@
 diff --git a/lib/default.nix b/lib/default.nix
-index 6f8530296044..fd4776de9c43 100644
+index d45e6de0c33f..a9edcc8a09f8 100644
 --- a/lib/default.nix
 +++ b/lib/default.nix
-@@ -464,6 +464,7 @@ let
+@@ -466,6 +466,7 @@ let
          mkAfter
          mkAliasDefinitions
          mkAliasAndWrapDefinitions
@@ -11,10 +11,10 @@ index 6f8530296044..fd4776de9c43 100644
          mkRemovedOptionModule
          mkRenamedOptionModule
 diff --git a/lib/modules.nix b/lib/modules.nix
-index d6061ec6d039..099466d92e5d 100644
+index 23ee8201f7c5..a365ce4d9b62 100644
 --- a/lib/modules.nix
 +++ b/lib/modules.nix
-@@ -1116,7 +1116,7 @@ let
+@@ -1118,7 +1118,7 @@ let
          # Sort mkOrder properties.
          defs''' =
            # Avoid sorting if we don't have to.
@@ -23,30 +23,40 @@ index d6061ec6d039..099466d92e5d 100644
              sortProperties defs''.values
            else
              defs''.values;
-@@ -1126,12 +1126,18 @@ let
+@@ -1128,12 +1128,29 @@ let
          inherit (defs'') highestPrio;
        };
      defsFinal = defsFinal'.values;
 +    #defsFinal = filter (def: def.value._type or "" != "apply") defsFinal'.values;
- 
+
      # Type-check the remaining definitions, and merge them. Or throw if no definitions.
 -    mergedValue =
--      if isDefined then
++    mergedValue = let
++      isMkApply = def: def.value._type or "" == "apply";
++      hasMkApply = any isMkApply defsFinal;
++    in
+       if isDefined then
 -        if all (def: type.check def.value) defsFinal then
 -          type.merge loc defsFinal
-+    mergedValue = let
-+      merged = type.merge loc (foldl' (defs: def: (
-+        # on each "apply", merge the previous defs and continue with the applied value
-+        if def.value._type or "" != "apply" then defs ++ [ def ]
-+        else if defs == [ ] then [ ] # ignore mapper if all values are explicitly ordered after it (see sortProperties)
-+        else [ (def // { value = def.value.mapper (type.merge loc defs); }) ]
-+      )) [ ] defsFinal'.values);
-+    in if isDefined then
-+        if all (def: type.check def.value) defsFinal then merged
++        if (
++          if hasMkApply then
++            all (def: isMkApply def || type.check def.value) defsFinal
++          else
++            all (def: type.check def.value) defsFinal
++        ) then
++          if hasMkApply then
++            type.merge loc (foldl' (defs: def: (
++              # on each "apply", merge the previous defs and continue with the applied value
++              if !(isMkApply def) then defs ++ [ def ] # (the `defs ++ [ def ]` is quadratic in `length defs`)
++              else if defs == [ ] then [ ] # ignore mapper if is the only "value" set (TODO: what's the error message in that case?) or all values are explicitly ordered after it (see sortProperties)
++              else [ (def // { value = def.value.mapper (type.merge loc defs); }) ]
++            )) [ ] defsFinal)
++          else
++            type.merge loc defsFinal
          else
            let
              allInvalid = filter (def: !type.check def.value) defsFinal;
-@@ -1278,7 +1284,11 @@ let
+@@ -1280,7 +1297,11 @@ let
          else
            def;
        defs' = map strip defs;
@@ -58,11 +68,11 @@ index d6061ec6d039..099466d92e5d 100644
 +      in a' < b' || (a' == b' && (a.value._type or "" != "apply" && b.value._type or "" == "apply"));
      in
      sort compare defs';
- 
-@@ -1405,6 +1415,11 @@ let
+
+@@ -1407,6 +1428,11 @@ let
    defaultOrderPriority = 1000;
    mkAfter = mkOrder 1500;
- 
+
 +  mkApply = mapper:
 +    { _type = "apply";
 +      inherit mapper;
@@ -71,7 +81,7 @@ index d6061ec6d039..099466d92e5d 100644
    # Convenient property used to transfer all definitions and their
    # properties from one option to another. This property is useful for
    # renaming options, and also for including properties from another module
-@@ -2103,6 +2118,7 @@ private
+@@ -2110,6 +2136,7 @@ private
      mkAliasIfDef
      mkAliasOptionModule
      mkAliasOptionModuleMD
