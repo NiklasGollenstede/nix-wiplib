@@ -85,7 +85,7 @@ in {
             raspberrypi-eeprom # rpi-eeprom-update
         ];
 
-        boot.initrd.systemd.enableTpm2 = false;
+        boot.initrd.systemd.tpm2.enable = false;
 
     }) (lib.mkIf cfg.i2c { ## i2c
 

@@ -53,6 +53,9 @@ in {
         #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
 
         ## Boot
+        hardware.cpu = lib.mkIf (pkgs.system == "x86_64-linux") (let
+            updateMicrocode = lib.mkOverride 900 { updateMicrocode = true; }; # (enable this even of »config.hardware.enableRedistributableFirmware == false«, but still allow overriding it without force)
+        in { amd = updateMicrocode; intel = updateMicrocode; }); # (seems to be perfectly fine to enable both: kernel extracts both and picks the correct one)
         boot.initrd.systemd.enable = lib.mkIf (!config.boot.isContainer) (lib.mkDefault true);
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
         boot.kernelParams = lib.mkBefore [ "panic=10" ]; # On panic, show error for 10 seconds, then reboot. (»mkBefore« so that added parameters will override this.)
@@ -136,12 +139,32 @@ in {
 
         system.autoUpgrade = {
             enable = lib.mkDefault true; channel = null;
-            flake = "."; # $flakePath#${config.${installer}.outputName}
             dates = lib.mkDefault "05:40"; randomizedDelaySec = lib.mkDefault "30min";
             allowReboot = lib.mkDefault false;
+            flake = "."; # $flakePath#${config.${installer}.outputName}
+            #flags = [ "--no-update-lock-file" ];
         };
 
-        systemd.services.nixos-upgrade.script = lib.mkMerge [ (lib.mkBefore ''
+        systemd.services.nixos-upgrade.script = let
+            # Older versions of Nix (<2.20?) would update indirect inputs from the local flake registry (which points into the store) and would simply use existing store paths when nothing needed to be updated.
+            # Newer versions first refused to do the registry lookup, and then started fetching inputs into the "Git cache" even if, according to their pinned narHash, they clearly already exist in the store.
+            # The latter is not only slow, but may (completely unnecessarily) fail if the input can't be fetched, for example because it was "indirect" and redirected to a local repo.
+            # This attempts to work around that by:
+            # * telling Nix to update everything that is not "indirect" (tho the current solution will/can only update direct inputs), and
+            # * removing all information other than the narHash from "indirect" inputs where Nix would fail to fetch them to add them to the pointless cache.
+            lock = if cfg.includeInputs?self then lib.importJSON "${cfg.includeInputs.self}/flake.lock" else { nodes.root.inputs = [ ]; };
+            to-update = lib.remove null (lib.mapAttrsToList (input: alias: if lock.nodes.${alias}.original.type != "indirect" then input else null) lock.nodes.root.inputs);
+            #to-update = lib.filter (input: lock.nodes.${input}.locked?rev) lock.nodes.root;
+            # github, git+ssh, git+https, https(flakehub) all set a "rev"; but git+file (which could not be updated) also does if the tree was clean
+            newLock = builtins.toJSON {
+                inherit (lock) version; root = "root";
+                nodes = (lib.mapAttrs (k: dep: dep // (lib.optionalAttrs ((dep.original.type or null) == "indirect") {
+                    # pretend all inputs were clean, cuz otherwise current (~v2.28) Nix versions fail
+                    locked = { inherit (dep.locked) narHash; type = "tarball"; url = "file:///dev/null"; };
+                    # (all inputs' paths are prevented from being GCed above)
+                })) lock.nodes);
+            };
+        in (lib.mkMerge [ (lib.mkBefore ''
             # Make flakePath writable and a repo if necessary:
             flakePath=${lib.escapeShellArg config.environment.etc.nixos.source}
             if [[ -e $flakePath/flake.lock && ! -w $( realpath "$flakePath" )/flake.lock ]] ; then
@@ -157,16 +180,19 @@ in {
                 else
                     flakePath=$tmpdir # path://$tmpdir
                 fi
+                ${lib.optionalString (cfg.includeInputs?self) ''
+                    printf %s ${lib.escapeShellArg newLock} > "$flakePath"/flake.lock || exit
+                ''}
             fi
             cd "$flakePath" || exit
 
             # This (implicitly passing »--flake«) requires nix.version > 2.18:
-            nix --extra-experimental-features 'nix-command flakes' --option-flake-registry 'path:/etc/nix/registry.json' flake update ${/* lib.escapeShellArgs (defaults are not split properly) */ toString config.system.autoUpgrade.flags} || failed=$?
+            nix --extra-experimental-features 'nix-command flakes' flake update ${lib.escapeShellArgs to-update} || failed=$?
             # (Since all inputs to the system flake are linked as system-level flake registry entries, even "indirect" references that don't really exist on the target can be "updated" (which keeps the same hash but changes the path to point directly to the nix store).)
             if [[ ''${failed:-} ]] ; then echo >&2 'Updating (some) inputs failed' ; fi
         '') (lib.mkAfter ''
             if [[ ''${failed:-} ]] ; then exit $failed ; fi
-        '') ];
+        '') ]);
 
         # TODO: reboots
 

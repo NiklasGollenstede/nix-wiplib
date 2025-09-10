@@ -33,7 +33,7 @@ in {
         ''; type = lib.types.bool; default = true; };
         hostName = lib.mkOption { description = ''The name of this systems configuration as attribute of `''${nixos-config.flake}#nixosConfigurations`.''; type = lib.types.str; defaultText = config.networking.hostName; };
         nixos-config.flake = lib.mkOption { description = ''
-            The flake that this system is configured in. This should be `inputs.self`, or something equivalent.
+            The flake that this system is configured in. This should be `inputs.self`, or something equivalent (with populated `.inputs`, not just a source path).
         ''; type = lib.types.package; defaultText = lib.literalMD ''`config._module.args.inputs.self`, if set''; };
         nixos-config.name = lib.mkOption { description = ''
             The name of `.flake`. Defaults to `nixos-config` and can be changed for vanity or if a (transitive) input of `.flake` is already named `nixos-config`.
@@ -60,9 +60,15 @@ in {
                 throw ''`config.nix.syspkgs.nixos-config.flake`'s lockfile already has an entry `${cfg.nixos-config.name}`. (Change `config.nix.syspkgs.nixos-config.name` to something else.)''
             else builtins.toJSON {
                 inherit (lock) version; root = "root";
-                nodes = (lib.mapAttrs (k: dep: dep // (lib.optionalAttrs (dep?inputs) {
-                    # all "follows" are relative to the previous root, so the new name of that needs t be prepended to all follows-paths
+                nodes = (lib.mapAttrs (name: dep: dep // (lib.optionalAttrs (dep?inputs) {
+                    # all "follows" are relative to the previous root, so the new name of that needs to be prepended to all follows-paths
                     inputs = lib.mapAttrs (k: ref: if lib.isString ref then ref else [ cfg.nixos-config.name ] ++ ref) dep.inputs;
+                }) // (lib.optionalAttrs (
+                    (name == "nixpkgs") || # Ideally, we'd want to do the below for _all_ packages, as Nix's tarball/git cache is broken and an unnecessary slowdown. But then inputs are missing. But for nixpkgs it seems to work. And copying stuff from /dev/null (and apparently ignoring the result) is faster than fetching it from GitHub :shrug:
+                dep.locked?dirtyRev) {
+                    # pretend all inputs were clean, cuz otherwise current (~v2.28) Nix versions fail
+                    locked = { inherit (dep.locked) narHash; type = "tarball"; url = "file:///dev/null"; };
+                    #original = { id = name; type = "indirect"; };
                 })) lock.nodes) // {
                     ${cfg.nixos-config.name} = { # this was the "root"
                         inputs = lock.nodes.root.inputs; original = { id = cfg.nixos-config.name; type = "indirect"; };
@@ -93,7 +99,7 @@ in {
             "nix/nixpkgs/nixos".source = "${cfg.nixos-config.flake.inputs.nixpkgs}/nixos"; # also import <nixpkgs/nixos>
         });
 
-        # Only actually activate it if the legacy search path is enabled:
+        # Only actually activate the above if the legacy search path is enabled:
         nix.nixPath = lib.mkIf (cfg.legacy && config.nix.channel.enable) (lib.mkDefault [ # (it's a list, so we can only replace anything by replacing the whole thing at a higher priority)
             "nixpkgs=/etc/nix/nixpkgs" # (use indirection so that all open shells update automatically)
             "nixos-config=/etc/nixos/configuration.nix"
