@@ -9,9 +9,10 @@ Things that really should be (more like) this by default.
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: moduleArgs@{ options, config, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
+dirname: inputs: moduleArgs@{ options, config, pkgs, lib, modulesPath, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer;
     cfg = config.${prefix}.base;
+    nixosVersion = lib.strings.fileContents "${modulesPath}/../../.version"; # (accurate and can be used for imports)
     outputName = config.${installer}.outputName;
     byDefault = { default = true; example = false; };
     ifKnowsSelf = { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${config.${prefix}.installer.outputName}"; example = false; };
@@ -43,7 +44,6 @@ in {
 
         ## Nix
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
-        nix.package = lib.mkIf (pkgs.nixVersions?nix_2_26 && lib.versionOlder pkgs.nix.version pkgs.nixVersions.nix_2_26.version) (lib.mkDefault pkgs.nixVersions.nix_2_26);
         nix.settings.experimental-features = [ "nix-command" "flakes" ]; # We will probably not ever get rid of these flags.
         programs.git.enable = lib.mkIf config.nix.enable (lib.mkDefault true); # Necessary as external dependency when working with flakes.
         nix.settings.ignore-try = lib.mkDefault true; # »nix --debugger« will not break on errors in »try« branches. Use »--option ignore-try false« on the CLI to revert this.
@@ -61,7 +61,11 @@ in {
         boot.kernelParams = lib.mkBefore [ "panic=10" ]; # On panic, show error for 10 seconds, then reboot. (»mkBefore« so that added parameters will override this.)
         #boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
-        systemd.extraConfig = "StatusUnitFormat=name"; boot.initrd.systemd.extraConfig = "StatusUnitFormat=name"; # Show unit names instead of descriptions during boot.
+    }) (if nixosVersion >= "25.11" then { # Show unit names instead of descriptions in systemctl status output and during boot.
+        systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name"; boot.initrd.systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name";
+    } else {
+        systemd.extraConfig = "StatusUnitFormat=name"; boot.initrd.systemd.extraConfig = "StatusUnitFormat=name";
+    }) ({
         services.getty.helpLine = lib.mkForce "";
         systemd.services.rtkit-daemon = lib.mkIf (config.security.rtkit.enable) { serviceConfig.LogLevelMax = lib.mkDefault "warning"; }; # spams, and probably irrelevant
 

@@ -28,6 +28,7 @@ in {
         ${prefix}.profiles.bash.functions = {
             ## »with« doesn't seem to be a common unix command yet, and it makes sense here: with package(s) => do stuff
             "with" = "local supportInline=1 ; source ${../../pkgs/scripts/with.sh}";
+            lp = ''path=''${1:-$PWD$} ; rel="$( basename "$path" )" ; cd "$( dirname "$path" )" && namei -lx "$PWD"/"$rel"''; # similar to »ll -d« on all path element from »$1« to »/«
         };
 
         environment.shellAliases = {
@@ -36,7 +37,6 @@ in {
             l  = "ls -alhF"; # (added F)
             ll = "ls -alF"; # (added aF)
             lt = "${lib.getExe pkgs.tree} -a -p -g -u -s -D -F --timefmt '%Y-%m-%d %H:%M:%S' -I '.git/|node_modules/'"; # ll like tree
-            lp = pkgs.writeShellScript "lp" ''PATH=${pkgs.util-linux}/bin/ ; path=''${1:-$PWD$} ; rel="$( basename "$path" )" ; cd "$( dirname "$path" )" && namei -lx "$PWD"/"$rel"''; # similar to »ll -d« on all path element from »$1« to »/«
 
             # colorized listing of all interface's IPs
             ips = "ip -c -br addr";

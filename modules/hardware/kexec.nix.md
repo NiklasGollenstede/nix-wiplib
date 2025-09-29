@@ -108,9 +108,8 @@ in {
     systemd.services.restore-network = lib.mkIf cfg.applyInheritedIpSetup (import inputs.nixos-images.nixosModules.kexec-installer moduleArgs).config.systemd.services.restore-network;
 
     # Both providing multiple microcode archives to prepend and applying them during kexec seems to be working just fine:
-    hardware.cpu.amd.updateMicrocode = true;
-    hardware.cpu.intel.updateMicrocode = true; # (tested: even if sorted second, this gets applied on a previously outdated intel CPU)
-
+    hardware.cpu.amd.updateMicrocode = lib.mkIf (pkgs.system == "x86_64-linux") true;
+    hardware.cpu.intel.updateMicrocode = lib.mkIf (pkgs.system == "x86_64-linux") true; # (tested: even if sorted second, this gets applied on a previously outdated intel CPU)
 
 }) ({ ## stripped-down base config
 

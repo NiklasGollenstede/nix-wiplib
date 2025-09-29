@@ -101,6 +101,7 @@
 		"hugepages",
 		"ignoredups",
 		"ignorespace",
+		"imap",
 		"initdb",
 		"inodes",
 		"inotify",

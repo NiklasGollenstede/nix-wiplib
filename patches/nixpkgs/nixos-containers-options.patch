@@ -23,7 +23,7 @@ index e5a0d37d6a9c..3d6db2c4ecdc 100644
                      (import "${toString config.nixpkgs}/nixos/lib/eval-config.nix" {
                        modules =
                          let
-@@ -590,10 +582,25 @@ in
+@@ -590,10 +582,27 @@ in
                        # The system is inherited from the host above.
                        # Set it to null, to remove the "legacy" entrypoint's non-hermetic default.
                        system = null;
@@ -46,6 +46,8 @@ index e5a0d37d6a9c..3d6db2c4ecdc 100644
                };
 
 +              options = mkOption { default = system.options; readOnly = true; };
++
++              system = mkOption { default = system; readOnly = true; };
 +
                path = mkOption {
                  type = types.path;

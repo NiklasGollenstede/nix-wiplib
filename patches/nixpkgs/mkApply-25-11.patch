@@ -1,0 +1,267 @@
+diff --git a/lib/default.nix b/lib/default.nix
+index 3eb2ecc308a4..193ffadb4d5b 100644
+--- a/lib/default.nix
++++ b/lib/default.nix
+@@ -471,6 +471,7 @@ let
+         mkAfter
+         mkAliasDefinitions
+         mkAliasAndWrapDefinitions
++        mkApply
+         fixMergeModules
+         mkRemovedOptionModule
+         mkRenamedOptionModule
+diff --git a/lib/modules.nix b/lib/modules.nix
+index e91a4d2afb92..16d9aa7247f0 100644
+--- a/lib/modules.nix
++++ b/lib/modules.nix
+@@ -1127,7 +1127,21 @@ let
+     };
+ 
+   # Merge definitions of a value of a given type.
+-  mergeDefinitions = loc: type: defs: rec {
++  mergeDefinitions = loc: type: defs: let
++
++    isMkApply = def: def.value._type or "" == "apply";
++    hasMkApply = any isMkApply defsFinal;
++
++    defsApplied = merge: if hasMkApply then
++      foldl' (defs: def: (
++        # on each "apply", merge the previous defs and continue with the applied value
++        if !(isMkApply def) then defs ++ [ def ] # (the `defs ++ [ def ]` is quadratic in `length defs`)
++        else if defs == [ ] then [ ] # ignore mapper if is the only "value" set (TODO: what's the error message in that case?) or all values are explicitly ordered after it (see sortProperties)
++        else [ (def // { value = def.value.mapper (merge loc defs); }) ]
++      )) [ ] defsFinal
++    else
++      defsFinal;
++
+     defsFinal' =
+       let
+         # Process mkMerge and mkIf properties.
+@@ -1151,7 +1165,7 @@ let
+         # Sort mkOrder properties.
+         defsSorted =
+           # Avoid sorting if we don't have to.
+-          if any (def: def.value._type or "" == "order") defsFiltered.values then
++          if any (def: let type = def.value._type or ""; in type == "order" || type == "apply") defsFiltered.values then
+             sortProperties defsFiltered.values
+           else
+             defsFiltered.values;
+@@ -1162,6 +1176,9 @@ let
+       };
+     defsFinal = defsFinal'.values;
+ 
++  in rec {
++    inherit defsFinal defsFinal';
++
+     # Type-check the remaining definitions, and merge them. Or throw if no definitions.
+     mergedValue =
+       if isDefined then
+@@ -1172,8 +1189,16 @@ let
+             throw "A definition for option `${showOption loc}' is not of type `${type.description}'. TypeError: ${checkedAndMerged.headError.message}"
+           else
+             checkedAndMerged.value
+-        else if all (def: type.check def.value) defsFinal then
+-          type.merge loc defsFinal
++        else
++
++        if (
++          if hasMkApply then
++            all (def: isMkApply def || type.check def.value) defsFinal
++          else
++            all (def: type.check def.value) defsFinal
++        ) then
++            type.merge loc (defsApplied type.merge)
++
+         else
+           let
+             allInvalid = filter (def: !type.check def.value) defsFinal;
+@@ -1201,9 +1226,12 @@ let
+         (
+           if type.merge ? v2 then
+             let
++              doMerge = loc: defs: (type.merge.v2 {
++                inherit loc defs;
++              }).value;
+               r = type.merge.v2 {
+                 inherit loc;
+-                defs = defsFinal;
++                defs = defsApplied doMerge;
+               };
+             in
+             r
+@@ -1357,7 +1385,11 @@ let
+         else
+           def;
+       defs' = map strip defs;
+-      compare = a: b: (a.priority or defaultOrderPriority) < (b.priority or defaultOrderPriority);
++      # mkApply mappers are sorted after other elements of the same priority.
++      compare = a: b: let # lessThan
++        a' = a.priority or defaultOrderPriority;
++        b' = b.priority or defaultOrderPriority;
++      in a' < b' || (a' == b' && (a.value._type or "" != "apply" && b.value._type or "" == "apply"));
+     in
+     sort compare defs';
+ 
+@@ -1484,6 +1516,11 @@ let
+   defaultOrderPriority = 1000;
+   mkAfter = mkOrder 1500;
+ 
++  mkApply = mapper:
++    { _type = "apply";
++      inherit mapper;
++    };
++
+   # Convenient property used to transfer all definitions and their
+   # properties from one option to another. This property is useful for
+   # renaming options, and also for including properties from another module
+@@ -2184,6 +2221,7 @@ private
+     mkAliasIfDef
+     mkAliasOptionModule
+     mkAliasOptionModuleMD
++    mkApply
+     mkAssert
+     mkBefore
+     mkChangedOptionModule
+diff --git a/lib/tests/modules.sh b/lib/tests/modules.sh
+index 5cd781752317..859a9ac71938 100755
+--- a/lib/tests/modules.sh
++++ b/lib/tests/modules.sh
+@@ -157,6 +157,8 @@ checkConfigError() {
+     fi
+ }
+ 
++checkConfigOutput '^true$' config.result ./mkApply.nix
++
+ # Shorthand meta attribute does not duplicate the config
+ checkConfigOutput '^"one two"$' config.result ./shorthand-meta.nix
+ 
+diff --git a/lib/tests/modules/mkApply.nix b/lib/tests/modules/mkApply.nix
+new file mode 100644
+index 000000000000..0dc7271b544c
+--- /dev/null
++++ b/lib/tests/modules/mkApply.nix
+@@ -0,0 +1,124 @@
++#!/usr/bin/env -S bash -c 'bash <( tail -n+3 "$0" ) "$0" "$@"'
++/* begin script:
++
++nix-instantiate --timeout 1 --eval-only --show-trace --read-write-mode --json -E "$script" -A "$attr"
++
++exit # end script, begin document: */
++
++{ lib, config, ... }: let
++
++  appendToAll = suffix: (list: lib.map (x: x + suffix) list);
++
++  tests = {
++    array = { # listOf uses the v2 combined merge and check
++      type = lib.types.listOf lib.types.str;
++      apply = builtins.sort builtins.lessThan;
++      expected = [ "a!" "b!" "c!" "d!" ];
++      definitions = [
++        ["a"]
++        (lib.mkApply (appendToAll "!"))
++        ["b" "d"]
++        ["c"]
++      ];
++    };
++    ordered = {
++      type = lib.types.listOf lib.types.str;
++      apply = builtins.sort builtins.lessThan;
++      expected = [ "a!+?" "b!+?" "c+?" "d?" ];
++      definitions = [
++                      ["c"]
++        (lib.mkAfter  (lib.mkApply (appendToAll "?")))
++                      (lib.mkApply (appendToAll "+"))
++        (lib.mkBefore (lib.mkApply (appendToAll "!")))
++        (lib.mkBefore ["a" "b"])
++        (lib.mkAfter  ["d"])
++      ];
++    };
++    no-merge-v2 = { # as of writing, does not use v2 merging
++      type = lib.types.commas;
++      expected = "([{b},c],d)";
++      definitions = [
++                      "c"
++        (lib.mkAfter  (lib.mkApply (s: "(${s})")))
++                      (lib.mkApply (s: "[${s}]"))
++        (lib.mkBefore (lib.mkApply (s: "{${s}}")))
++        (lib.mkBefore "b")
++        (lib.mkAfter  "d")
++      ];
++    };
++    delete-attr = {
++      type = lib.types.attrsOf lib.types.anything;
++      expected = { good-entry = true; };
++      definitions = [
++        { good-entry = true; must-be-gone = true; }
++        { must-be-gone = lib.mkForce null; } # can't delete entry
++        (lib.mkApply (a: builtins.removeAttrs a [ "must-be-gone" ]))
++      ];
++    };
++    change-default = {
++      type = lib.types.bool;
++      expected = true;
++      definitions = [ # Change a default without affecting its priority:
++        (lib.mkOptionDefault false)
++        (lib.mkOptionDefault (lib.mkApply (value: true)))
++        #(lib.mkOptionDefault true) # "The option `bool' has conflicting definition values"
++        #(lib.mkDefault true) # changes priority
++      ];
++    };
++    extend-script = {
++      type = lib.types.path;
++      expected = "/nix/store/wrapped";
++      definitions = [ #
++        "/nix/store/default"
++        (lib.mkApply (prev: "/nix/store/wrapped"))
++        #(lib.mkApply (prev: pkgs.writeShellScript "wrapped" ''
++        #  echo preparing ; source ${prev} ; echo done
++        #''))
++      ];
++    };
++    remove-package = {
++      type = lib.types.listOf (lib.types.attrsOf lib.types.anything);
++      apply = builtins.sort (a: b: throw "can't sort");
++      # programs.foo.enable = true;
++      # users.bar.packages = [ config.programs.foo.package ];
++      # environment.systemPackages = lib.mkApply (lib.remove config.programs.foo.package);
++      expected = [ { pname = "baz"; } ];
++      definitions = let
++        bar = { pname = "bar"; };
++        baz = { pname = "baz"; };
++      in [
++        [bar] [baz]
++        (lib.mkApply (lib.remove bar))
++      ];
++    };
++  };
++
++  importTest = name: args@{
++    type, definitions,
++    apply ? null,
++    ok ? (value: value == expected),
++    expected ? throw "missing default",
++  }: {
++    _file = "case '${name}' option";
++    options.${name} = lib.mkOption ({ inherit type; } // lib.optionalAttrs (args?apply) { inherit apply; });
++    options."${name}.ok" = lib.mkOption {
++      type = lib.types.bool; readOnly = true;
++      default = if ok config.${name} then true else lib.warn ''
++        Expected "${name}"
++        to be   ${lib.generators.toPretty { } expected},
++        but got ${lib.generators.toPretty { } config.${name}}
++      '' false;
++    };
++    imports = lib.imap1 (i: value: {
++      _file = "case '${name}' definition ${toString i}";
++      config.${name} = value;
++    }) definitions;
++  };
++
++in {
++  imports = builtins.attrValues (builtins.mapAttrs importTest tests);
++  options.result = lib.mkOption {
++    type = lib.types.bool; readOnly = true;
++    default = builtins.all (name: config."${name}.ok") (builtins.attrNames tests);
++  };
++}

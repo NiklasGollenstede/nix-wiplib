@@ -6,7 +6,11 @@
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS overlay:
-dirname: inputs: final: prev: { sanoid = prev.sanoid.overrideAttrs (old: {
+dirname: inputs: final: prev: { sanoid = prev.sanoid.overrideAttrs (old: rec {
+    #nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.breakpointHook ];
+    version = "2.2.0"; src = old.src.override { # v2.3.0 does not do much, other than breaking the patches
+        rev = "v${version}"; sha256 = "sha256-qfRGZ10fhLL4tJL97VHrdOkO/4OVpa087AsL9t8LMmk=";
+    };
     patches = (old.patches or [ ]) ++ [
 
         # Fixes syncoid so that when it is supposed to send recursive snapshots, it also creates and prunes its sync snaps recursively.
