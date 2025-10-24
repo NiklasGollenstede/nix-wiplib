@@ -29,6 +29,7 @@ in {
             else { }
         ); };
         selfInputName = lib.mkOption { description = "name of »config.${prefix}.base.includeInputs.self« flake"; type = lib.types.str; default = "nixos-config"; };
+        panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // byDefault; # It's stupidly hard to remove items from lists ...
         showDiffOnActivation = lib.mkEnableOption "showing a diff compared to the previous system on activation of this new system (generation)" // byDefault;
         autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // ifKnowsSelf;
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // byDefault;
@@ -58,7 +59,7 @@ in {
         in { amd = updateMicrocode; intel = updateMicrocode; }); # (seems to be perfectly fine to enable both: kernel extracts both and picks the correct one)
         boot.initrd.systemd.enable = lib.mkIf (!config.boot.isContainer) (lib.mkDefault true);
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
-        boot.kernelParams = lib.mkBefore [ "panic=10" ]; # On panic, show error for 10 seconds, then reboot. (»mkBefore« so that added parameters will override this.)
+        boot.kernelParams = lib.mkBefore ([ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail")); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails. »boot.panic_on_fail« also applies to systemd-initrd.
         #boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
     }) (if nixosVersion >= "25.11" then { # Show unit names instead of descriptions in systemctl status output and during boot.
@@ -204,11 +205,6 @@ in {
 
         # (almost) Free Convenience:
         ${prefix}.profiles.bash.enable = lib.mkIf (cfg.bashInit) true;
-
-
-    }) ({ ## Legacy stuff
-
-        boot.kernelParams = [ "boot.panic_on_fail" ]; # This only works with the legacy stage 1. Shouldn't use that either way.
 
 
     }) ]);

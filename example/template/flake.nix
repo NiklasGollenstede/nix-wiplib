@@ -1,5 +1,5 @@
 { description = (
-    "TOOD"
+    "TODO"
     # This flake file defines the inputs (other than files/archives fetched by hardcoded hash) and exports all results produced by this repository.
     # It should always pass »nix flake check« and »nix flake show --allow-import-from-derivation«, which means inputs and outputs comply with the flake convention.
 ); inputs = {

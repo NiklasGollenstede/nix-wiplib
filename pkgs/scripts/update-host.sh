@@ -8,13 +8,14 @@ declare -g -A allowedArgs=(
     [--remote-eval]="Perform the evaluation on the target system after using »push-flake«"
     #[--system=<store-path>]="Skip evaluation. If this path ends in ».drv«, realize (build) it, otherwise use it directly. With »--remove-eval«, assume the path to exist on the remote already, otherwise copy it there."
     [--spec=<string>]='"Specialisation" to switch to. Supply empty string to switch back to the default specialisation. Defaults to the current specialisation, if any. (Untested.)'
+    [--debug]="Debug the (new) configuration. Currently, this sets »verb« to »eval«, defaults »name« to »sshHostname«, and adds »--debugger« to the nix build command."
 )
 details="
 This script uses Nix locally (and when exported by a flake that flake's nixpkgs' Nix version) to evaluate the host configuration, then pushes the build instructions (derivation files) to the target, and builds (derives) them there, before applying them according to »verb« (this means that the command fails quickly and without traces when the evaluation fails, but copying derivation files, if many derivations have changed, can be oddly slow).
 
 »sshHostname« can be a »[user@]hostname/IP« combo that will be used as host argument for OpenSSH and as a Nix »ssh://«-URL; if not provided, it and »--name« default to »\$( hostname )« run locally.
 »verb« can be »build« to only build the configuration (on the target in »~/result«), »activate« to only call it's »result/activate« script, or any verb accepted by »result/bin/switch-to-configuration«. »verb« defaults to »switch«, which is the default NixOS update mode, handling changes to systemd units and calling »switch-to-configuration« but not rebooting.
-Any extra arguments are passed to the nix eval and build commands, so something like »-- --debugger --keep-going« can be useful.
+Any extra arguments are passed to the nix eval and build commands, so something like »-- --show-trace --keep-going« can be useful.
 "
 
 PATH=$PATH:@{pkgs.git}/bin:@{pkgs.hostname-debian}/bin:@{pkgs.gnugrep}/bin:@{pkgs.openssh}/bin:@{pkgs.nix}/bin
@@ -27,23 +28,28 @@ exitCode=2 generic-arg-verify || exit
 if [[ ${argv[0]:-} == -* ]] ; then argv=( '' "${argv[@]}" ) ; exit 1 ; fi
 if [[ ${argv[1]:-} == -* ]] ; then argv=( "${argv[0]:-}" '' "${argv[@]:1}" ) ; fi
 targetHost=${argv[0]:-$( hostname )}
-predicate=${argv[1]:-switch}
+verb=${argv[1]:-switch}
+if [[ ${args[debug]:-} ]] ; then
+    verb=eval ; args[name]=${args[name]:-$targetHost} ; argv+=( --debugger )
+fi
 
 #[[ targetHost =~ ^[a-z0-9-]+$ ]]
-if [[ ! ${argv[0]:-} && ! ${args[name]:-} ]] ; then args[name]=$targetHost ; fi
-hostname=${args[name]:-$( ssh "$targetHost" -T -- hostname )} || exit
+if [[ ! ${argv[0]:-} && ! ${args[name]:-} ]] ; then args[name]=$targetHost ; fi # avoid SSHing to current host
+configName=${args[name]:-$( ssh "$targetHost" -T -- hostname )} || exit
 
-if [[ ! ${args[remote-eval]:-} ]] ; then
-    drvPath=$( nix eval --extra-experimental-features 'nix-command flakes' --raw .#nixosConfigurations."$hostname".config.system.build.toplevel.drvPath "${argv[@]:2}" ) || exit
+if [[ $verb == eval ]] ; then
+    nix eval --extra-experimental-features 'nix-command flakes' --raw .#nixosConfigurations."$configName".config.system.build.toplevel.drvPath "${argv[@]:2}" ; exit
+elif [[ ! ${args[remote-eval]:-} ]] ; then
+    drvPath=$( nix eval --extra-experimental-features 'nix-command flakes' --raw .#nixosConfigurations."$configName".config.system.build.toplevel.drvPath "${argv[@]:2}" ) || exit
     nix --extra-experimental-features nix-command copy --to ssh://"$targetHost" --derivation "$drvPath^*" || exit
 else
-    drvPath=path:$( @{pkgs.push-flake!getExe} "$targetHost" . )#nixosConfigurations."$hostname".config.system.build.toplevel || exit
+    drvPath=path:$( @{pkgs.push-flake!getExe} "$targetHost" . )#nixosConfigurations."$configName".config.system.build.toplevel || exit
 fi
 
 ssh -q -t "$targetHost" -- "$( function remote { set -o pipefail -u
     function version-gr-eq { printf '%s\n%s' "$1" "$2" | LC_ALL=C sort -C -V -r ; }
     output= ; if version-gr-eq "$( nix --version | grep -Poe '\d+.*' )" '2.14' ; then output='^out' ; fi
-    if [[ $predicate == build ]] ; then
+    if [[ $verb == build ]] ; then
         nix --extra-experimental-features nix-command build --keep-going "${drvPath/.drv/.drv$output}" "$@" || return
         return
     else
@@ -59,9 +65,9 @@ ssh -q -t "$targetHost" -- "$( function remote { set -o pipefail -u
         fi
     fi
     $sudo nix-env -p /nix/var/nix/profiles/system --set "$systemPath" || return
-    if [[ $predicate == activate ]] ; then
+    if [[ $verb == activate ]] ; then
         $sudo "$systemPath"/"$suffix"/activate || return
     else
-        $sudo "$systemPath"/"$suffix"/bin/switch-to-configuration "$predicate" || return
+        $sudo "$systemPath"/"$suffix"/bin/switch-to-configuration "$verb" || return
     fi
-} ; declare -f remote ; declare -p drvPath predicate args ) ; remote" || exit
+} ; declare -f remote ; declare -p drvPath verb args ) ; remote" || exit

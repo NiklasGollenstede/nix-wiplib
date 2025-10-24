@@ -1,5 +1,6 @@
 dirname: inputs: let
     lib = inputs.self.lib.__internal__;
+    prefix = inputs.config.prefix;
 in rec {
 
     # Given a flake input (attribute passed to ta flakes `outputs` function), this returns a flake reference (thing that can be passed to lockfiles' `locked` or registries' `to` attributes) to the flake.
@@ -15,5 +16,11 @@ in rec {
     # Given a `base` directory path and a relative `dir`ectory path therein, this returns a sorted list of the relative paths of all (non-directory) files recursively in `dir`.
     # The `base` path part is only used to find the directory, whereas `dir` becomes a prefix of all listed paths.
     listDirRecursive = base: dir: builtins.concatLists (lib.mapAttrsToList (name: type: let joined = if dir == "" then name else "${dir}/${name}"; in if type == "directory" then listDirRecursive base joined else [ joined ]) (builtins.readDir "${base}/${dir}"));
+
+    mkKexec = {
+        name ? "kexec", config, inputs ? null, mkHosts ? inputs.self.mkHosts or lib.inst.mkSystemsFlake { },
+    }: let system = (mkHosts {
+        hosts.configs.${name} = { imports = [ config ]; config.${prefix}.hardware.kexec.enable = true; };
+    }).nixosConfigurations.${name}; in system // { inherit (system.config.system.build) kexecRun kexecTarball kernel netbootRamdisk; };
 
 }

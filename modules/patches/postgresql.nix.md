@@ -27,7 +27,9 @@ in {
             If the upgrade fails, the postgresql service will not be started and you may roll your (system) configuration back to the previous package version without any data loss (but of course with service downtime).
             This does not delete the previous database. If you are certain that the upgrade was successful, you may manually delete `.prevDataDir`.
         ''; type = lib.types.nullOr lib.types.package; default = null; example = lib.literalExpression "pkgs.postgresql_15"; };
-        prevDataDir = lib.mkOption { description = lib.mdDoc ''For automatic major version upgrades/migrations, the previous `.dataDir` (if that was set explicitly).''; type = lib.types.path; };
+        prevDataDir = lib.mkOption { description = lib.mdDoc ''
+            For automatic major version upgrades/migrations, the previous `.dataDir` (if that was set explicitly).
+        ''; type = lib.types.path; defaultText = lib.literalExpression ''"/var/lib/postgresql/''${.prevPackage.psqlSchema}"''; default = "/var/lib/postgresql/${cfg.prevPackage.psqlSchema}"; };
         upgradeArgs = lib.mkOption { description = lib.mdDoc ''Extra CLI arguments provided to `pg_upgrade` during automatic major version upgrades.''; type = lib.types.listOf lib.types.str; default = [ ]; };
     }; };
 
@@ -38,7 +40,7 @@ in {
         in if extensions == [ ] then base else base.withPackages extensions;
         esc = lib.escapeShellArg;
     in {
-        services.postgresql.prevDataDir = lib.mkDefault "/var/lib/postgresql/${cfg.prevPackage.psqlSchema}";
+
         systemd.services.postgresql.preStart = lib.mkBefore ''
             curData=${esc cfg.dataDir}
             curBin=${wrap cfg.package}/bin
@@ -61,7 +63,9 @@ in {
                 rmdir "$curData"/.auto-upgrade || true # should be empty
             ) || exit ; fi
         '';
+
         systemd.services.postgresql.serviceConfig = lib.mkMerge [
+            # TODO: should this test against the entire path or only the /var/lib/postgresql prefix?
             (lib.mkIf (cfg.prevDataDir != "/var/lib/postgresql/${cfg.prevPackage.psqlSchema}") {
                 ReadWritePaths = [ cfg.prevDataDir ];
             })
@@ -71,6 +75,7 @@ in {
             })
         ];
         systemd.services.postgresql.unitConfig.RequiresMountsFor = [ cfg.prevDataDir ];
+
     });
 
 }
