@@ -45,7 +45,7 @@ in {
 
         nix.registry = { syspkgs.flake = pkgs.runCommandLocal "syspkgs" {
             flake_nix = ''{ outputs = { ${cfg.nixos-config.name}, ... }: { # (no need to say how to get this, because it will already be in the store)
-                legacyPackages.${lib.strings.escapeNixIdentifier pkgs.system} = let
+                legacyPackages.${lib.strings.escapeNixIdentifier pkgs.stdenv.hostPlatform.system} = let
                     system = ${cfg.nixos-config.name}.nixosConfigurations.${lib.strings.escapeNixIdentifier cfg.hostName};
                 in system.pkgs // { # (this is probably slower than `import nixpkgs { }`, since it partially evaluates the system configuration as well)
                     # This allows you to use unfree packages (and individually acknowledge their "unfree" nature) on the CLI:

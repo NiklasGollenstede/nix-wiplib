@@ -6,7 +6,7 @@ Implements the sending (or forwarding) of encrypted ZFS datasets for incremental
 The sending host/user does not require destructive ZFS permissions on the target, i.e. it can never cause the destruction on pervious backups.
 See [the README](./README.md) for motivation and concepts.
 
-**NOTICE**: (If any dataset targets are defined, then) this module currently requires `config.services.syncoid.sshKey` to be set and the [`nixpkgs-syncoid-user-per-cmd`](../../../patches/nixpkgs/syncoid-user-per-cmd.patch) patch to be applied to `nixpkgs`.
+**NOTICE**: (If any dataset targets are defined, then) this module currently requires `config.services.syncoid.sshKey` to be set and the `nixpkgs/syncoid-user-per-cmd` [patch](../../../patches/nixpkgs/) to be applied to `nixpkgs`.
 See at the bottom of [`example/hosts/zfs-backup.nix.md`](../../../example/hosts/zfs-backup.nix.md) for an example how to do this (without patching all of `nixpkgs`).
 
 
@@ -28,19 +28,19 @@ in { imports = [ {
         };
         datasets = lib.mkOption {
             description = "ZFS datasets to back up.";
-            default = { }; apply = lib.filterAttrs (k: v: v != null);
-            type = lib.types.attrsOf (lib.types.nullOr (lib.types.submodule (sourceArgs@{ name, ... }: { options = {
+            default = { };
+            type = lib.fun.types.attrsOfSubmodules (sourceArgs@{ name, ... }: { options = {
                 path = lib.mkOption { description = "Path of the local source dataset. Sending will fail if the local dataset is not encrypted."; type = lib.types.str; default = name; readOnly = true; };
                 targets = lib.mkOption {
                     description = "Targets to send the dataset to.";
-                    default = { }; apply = lib.filterAttrs (k: v: v != null);
-                    type = lib.types.attrsOf (lib.types.nullOr (lib.types.submodule ({ name, ... }: { options = {
+                    default = { };
+                    type = lib.fun.types.attrsOfSubmodules ({ name, ... }: { options = {
                         name = lib.mkOption { description = "Symbolic name of the target, for example its hostname."; type = lib.types.strMatching ''^[a-zA-Z0-9_-]+$''; default = name; readOnly = true; };
                         host = lib.mkOption { description = "Hostname of the target."; type = lib.types.str; default = name; };
                         path = lib.mkOption { description = "Path of the dataset on `.host` to send to. If it ends in a `/` (recommended), then the `config.networking.hostName` and the last label of the source `..path` will be appended."; type = lib.types.str; };
                         user = lib.mkOption { description = "SSH user to log in as on `.host`."; default = "zfs-from-${config.networking.hostName}"; type = lib.types.str; };
                         startAt = lib.mkOption { description = "When to send to this target, as systemd time spec."; default = if sourceArgs.config.isForwarding then "04:15 UTC" else "00:15 UTC"; type = lib.types.str; }; # If forwarding, TRY to send after receiving (but can't ensure that).
-                    }; })));
+                    }; });
                 };
                 isForwarding = lib.mkOption {
                     description = "Whether the sent dataset is also being received to from elsewhere.";
@@ -58,7 +58,7 @@ in { imports = [ {
                 };
             }; config = {
                 locations = lib.mkMerge ((lib.mapAttrsToList (_: target: lib.mkOrder 1000 [ "${targetSpec sourceArgs.config target}" ]) sourceArgs.config.targets) ++ [ (lib.mkOrder 2000 [ "${config.networking.hostName}:${name}" ]) ]);
-            }; })));
+            }; });
         };
         postRestoreCommands = lib.mkOption { description = "When installing the system with `--zfs-restore`, bash commands to be run after each dataset in `.datasets` (whose local path will be in `$dataset`) has been restored."; type = lib.types.lines; default = ""; };
         forwardPendingProperty = lib.mkOption { default = "forward:pending-to"; type = lib.types.strMatching ''^[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$''; };

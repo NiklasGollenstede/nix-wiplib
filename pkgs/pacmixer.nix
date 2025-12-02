@@ -7,7 +7,10 @@ dirname: inputs: {
     ninja, buildPackages,
     libpulseaudio,
     ncurses,
-    gnustep,
+    gnustep-base,
+    gnustep-libobjc,
+    gnustep-make,
+    wrapGNUstepAppsHook,
 lib }: let
 
     # Repo README says to use gcc-objc, gnustep.libobjc wants to be used with clang. clang simply works.
@@ -25,8 +28,8 @@ in stdenv.mkDerivation rec {
     };
     passthru.updateScript = nix-update-script { };
 
-    nativeBuildInputs = [ ninja buildPackages.gnustep.wrapGNUstepAppsHook buildPackages.gnustep.make ]; # (only relevant when cross-compiling: pretty sure that when just stating gnustep.* here, Nix has no way to automatically pass the buildPackages version)
-    buildInputs = [ libpulseaudio ncurses gnustep.base gnustep.libobjc ];
+    nativeBuildInputs = [ ninja wrapGNUstepAppsHook gnustep-make ]; # (only relevant when cross-compiling: pretty sure that when just stating gnustep.* here, Nix has no way to automatically pass the buildPackages version)
+    buildInputs = [ libpulseaudio ncurses gnustep-base gnustep-libobjc ];
 
     postPatch = ''
         sed -i 's;gcc -MMD -MF $out.d $flags $cppflags;g++ -MMD -MF $out.d $flags $cppflags;' defs.ninja # use C++ compiler for C++ (no idea why that was different)

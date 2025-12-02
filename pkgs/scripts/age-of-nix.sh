@@ -69,7 +69,7 @@ agenixCompat= ; if [[ ! $secretsJSON ]] ; then agenixCompat=1 ; {
 } ; fi
 function get-recipients { # 1: secretFullPath
     if [[ $needReEval && ! $agenixCompat ]] ; then
-        secretsJSON=$( @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --raw .#.apps.@{pkgs.system}.@{args.appName}.derivation.secretsJSON ) || return
+        secretsJSON=$( @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --raw .#.apps.@{pkgs.stdenv.hostPlatform.system}.@{args.appName}.derivation.secretsJSON ) || return
     fi
     recipients=$( <<<$secretsJSON @{pkgs.jq!getExe} -r --arg path "$1" '.[$path].publicKeys[]' ) || true
     if [[ ! $recipients ]] ; then

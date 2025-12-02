@@ -34,8 +34,8 @@ in { imports = [ {
                 Remote sources (usually host(name)s) for which to allow SSH log-in limited to receiving (and sending/restoring) encrypted ZFS backups.
             '';
             # TODO: make permissions / allowed commands for restoring optional
-            default = { }; apply = lib.filterAttrs (k: v: v != null);
-            type = lib.types.attrsOf (lib.types.nullOr (lib.types.submodule (args@{ name, options, ... }: { options = {
+            default = { };
+            type = lib.fun.types.attrsOfSubmodules (args@{ name, options, ... }: { options = {
                 name = lib.mkOption { description = "Name of the source, for example the hostname of the host that is to send its backups here."; type = lib.types.str; default = name; readOnly = true; };
                 sshKey = lib.mkOption {
                     default = cfg.getSshKey name;
@@ -49,7 +49,7 @@ in { imports = [ {
                 #gid = lib.mkOption { default = lib.mkIf (config.ids.gids?${args.config.user} || options.gid.isDefined) config.ids.gids.${args.config.user} or args.config.uid; type = lib.types.int; }; # (fixing the GID is not really necessary)
             }; config = {
                 uid = lib.mkIf (config.ids.uids?${args.config.user}) (lib.mkOptionDefault config.ids.uids.${args.config.user});
-            }; })));
+            }; });
         };
         getSshKey = lib.mkOption {
             type = lib.types.functionTo lib.types.singleLineStr;

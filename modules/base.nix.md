@@ -9,20 +9,20 @@ Things that really should be (more like) this by default.
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: moduleArgs@{ options, config, pkgs, lib, modulesPath, ... }: let lib = inputs.self.lib.__internal__; in let
+dirname: inputs: moduleArgs@{ options, config, pkgs, lib, modulesPath, modulesVersion, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = inputs.config.prefix; inherit (inputs.installer.inputs.config.rename) installer;
     cfg = config.${prefix}.base;
-    nixosVersion = lib.strings.fileContents "${modulesPath}/../../.version"; # (accurate and can be used for imports)
     outputName = config.${installer}.outputName;
     byDefault = { default = true; example = false; };
     ifKnowsSelf = { default = outputName != null && cfg.includeInputs?self.nixosConfigurations.${outputName}; defaultText = lib.literalExpression "config.${prefix}.base.includeInputs?self.nixosConfigurations.\${config.${prefix}.installer.outputName}"; example = false; };
+    systemBuilderCommands = if modulesVersion >= "25.11" then "systemBuilderCommands" else "extraSystemBuilderCmds";
 in {
 
     options.${prefix} = { base = {
         enable = lib.mkEnableOption "saner defaults";
         includeInputs = lib.mkOption { description = "The system's build inputs, to be included in the flake registry, and on the »NIX_PATH« entry, such that they are available for self-rebuilds and e.g. as »pkgs« on the CLI."; type = lib.types.attrsOf lib.types.anything; apply = lib.filterAttrs (k: v: v != null); default = let
             inputs = moduleArgs.inputs or config._module.args.inputs;
-        in (
+        in lib.filterAttrs (n: v: v?outPath) (
             if (!config.nix.enable) then { }
             else if config.boot.isContainer then builtins.removeAttrs inputs [ "self" ] # avoid changing (and thus restarting) the containers on every trivial change
             else if inputs?self.outputs.outPath then inputs // { self = inputs.self // { outPath = inputs.self.outputs.outPath; }; } # see inputs.functions.lib.imports.importRepo
@@ -54,7 +54,7 @@ in {
         #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
 
         ## Boot
-        hardware.cpu = lib.mkIf (pkgs.system == "x86_64-linux") (let
+        hardware.cpu = lib.mkIf (pkgs.stdenv.hostPlatform.system == "x86_64-linux") (let
             updateMicrocode = lib.mkOverride 900 { updateMicrocode = true; }; # (enable this even of »config.hardware.enableRedistributableFirmware == false«, but still allow overriding it without force)
         in { amd = updateMicrocode; intel = updateMicrocode; }); # (seems to be perfectly fine to enable both: kernel extracts both and picks the correct one)
         boot.initrd.systemd.enable = lib.mkIf (!config.boot.isContainer) (lib.mkDefault true);
@@ -62,7 +62,7 @@ in {
         boot.kernelParams = lib.mkBefore ([ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail")); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails. »boot.panic_on_fail« also applies to systemd-initrd.
         #boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
-    }) (if nixosVersion >= "25.11" then { # Show unit names instead of descriptions in systemctl status output and during boot.
+    }) (if modulesVersion >= "25.11" then { # Show unit names instead of descriptions in systemctl status output and during boot.
         systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name"; boot.initrd.systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name";
     } else {
         systemd.extraConfig = "StatusUnitFormat=name"; boot.initrd.systemd.extraConfig = "StatusUnitFormat=name";
@@ -77,14 +77,14 @@ in {
             # "fs.inotify.max_user_watches" = lib.mkDefault 524288;
         };
 
-        system.extraSystemBuilderCmds = lib.mkIf config.boot.initrd.enable ''
+        system.${systemBuilderCommands} = lib.mkIf config.boot.initrd.enable ''
             ln -sT ${builtins.unsafeDiscardStringContext config.system.build.bootStage1} $out/boot-stage-1.sh # (this is super annoying to locate otherwise)
         ''; # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)
 
         wip.base.showDiffOnActivation = lib.mkIf (!config.nix.enable) (lib.mkDefault true);
         system.activationScripts.diff-systems = lib.mkIf cfg.showDiffOnActivation { text = ''
-            if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix && $(realpath /run/current-system) != "$systemConfig" ]] ; then
-                ${pkgs.nvd}/bin/nvd --nix-bin-dir=$systemConfig/sw/bin diff /run/current-system "$systemConfig"
+            if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix && "$(realpath /run/current-system)" != "$systemConfig" ]] ; then
+                ${pkgs.nvd}/bin/nvd --nix-bin-dir=$systemConfig/sw/bin diff "$(realpath /run/current-system)" "$systemConfig"
                 #$systemConfig/sw/bin/nix --extra-experimental-features nix-command store diff-closures /run/current-system "$systemConfig"
             fi
         ''; deps = [ "etc" ]; };
@@ -107,7 +107,7 @@ in {
 
         # »inputs.self« does not have a name (that is known here), so just register it as »/etc/nixos/« system config:
         environment.etc.nixos = lib.mkIf (cfg.includeInputs?self) (lib.mkDefault { source = "/run/current-system/config"; }); # (use this indirection to prevent every change in the config to necessarily also change »/etc«)
-        system.extraSystemBuilderCmds = lib.mkIf (cfg.includeInputs?self) ''
+        system.${systemBuilderCommands} = lib.mkIf (cfg.includeInputs?self) ''
             ln -sT ${cfg.includeInputs.self} $out/config # (build input for reference)
         '';
 
@@ -158,7 +158,7 @@ in {
             # * telling Nix to update everything that is not "indirect" (tho the current solution will/can only update direct inputs), and
             # * removing all information other than the narHash from "indirect" inputs where Nix would fail to fetch them to add them to the pointless cache.
             lock = if cfg.includeInputs?self then lib.importJSON "${cfg.includeInputs.self}/flake.lock" else { nodes.root.inputs = [ ]; };
-            to-update = lib.remove null (lib.mapAttrsToList (input: alias: if lock.nodes.${alias}.original.type != "indirect" then input else null) lock.nodes.root.inputs);
+            to-update = lib.remove null (lib.mapAttrsToList (input: alias: if builtins.isString alias && lock.nodes.${alias}.original.type != "indirect" then input else null) lock.nodes.root.inputs);
             #to-update = lib.filter (input: lock.nodes.${input}.locked?rev) lock.nodes.root;
             # github, git+ssh, git+https, https(flakehub) all set a "rev"; but git+file (which could not be updated) also does if the tree was clean
             newLock = builtins.toJSON {

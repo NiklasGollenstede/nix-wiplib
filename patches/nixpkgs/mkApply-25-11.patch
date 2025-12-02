@@ -1,8 +1,8 @@
 diff --git a/lib/default.nix b/lib/default.nix
-index 3eb2ecc308a4..193ffadb4d5b 100644
+index e10332ca58dd..34b26547faf9 100644
 --- a/lib/default.nix
 +++ b/lib/default.nix
-@@ -471,6 +471,7 @@ let
+@@ -470,6 +470,7 @@ let
          mkAfter
          mkAliasDefinitions
          mkAliasAndWrapDefinitions
@@ -11,11 +11,11 @@ index 3eb2ecc308a4..193ffadb4d5b 100644
          mkRemovedOptionModule
          mkRenamedOptionModule
 diff --git a/lib/modules.nix b/lib/modules.nix
-index e91a4d2afb92..16d9aa7247f0 100644
+index e545f9c9707d..accd71dcb6ad 100644
 --- a/lib/modules.nix
 +++ b/lib/modules.nix
-@@ -1127,7 +1127,21 @@ let
-     };
+@@ -1153,7 +1153,21 @@ let
+       '';
  
    # Merge definitions of a value of a given type.
 -  mergeDefinitions = loc: type: defs: rec {
@@ -37,7 +37,7 @@ index e91a4d2afb92..16d9aa7247f0 100644
      defsFinal' =
        let
          # Process mkMerge and mkIf properties.
-@@ -1151,7 +1165,7 @@ let
+@@ -1177,7 +1191,7 @@ let
          # Sort mkOrder properties.
          defsSorted =
            # Avoid sorting if we don't have to.
@@ -46,7 +46,7 @@ index e91a4d2afb92..16d9aa7247f0 100644
              sortProperties defsFiltered.values
            else
              defsFiltered.values;
-@@ -1162,6 +1176,9 @@ let
+@@ -1188,6 +1202,9 @@ let
        };
      defsFinal = defsFinal'.values;
  
@@ -56,7 +56,7 @@ index e91a4d2afb92..16d9aa7247f0 100644
      # Type-check the remaining definitions, and merge them. Or throw if no definitions.
      mergedValue =
        if isDefined then
-@@ -1172,8 +1189,16 @@ let
+@@ -1198,8 +1215,16 @@ let
              throw "A definition for option `${showOption loc}' is not of type `${type.description}'. TypeError: ${checkedAndMerged.headError.message}"
            else
              checkedAndMerged.value
@@ -65,31 +65,33 @@ index e91a4d2afb92..16d9aa7247f0 100644
 +        else
 +
 +        if (
-+          if hasMkApply then
++          if hasMkApply then # (this is really just a small performance optimization)
 +            all (def: isMkApply def || type.check def.value) defsFinal
 +          else
 +            all (def: type.check def.value) defsFinal
 +        ) then
-+            type.merge loc (defsApplied type.merge)
++            type.merge loc (defsApplied type.merge) # (defsApplied ... == defsFinal without mkApply)
 +
          else
            let
              allInvalid = filter (def: !type.check def.value) defsFinal;
-@@ -1201,9 +1226,12 @@ let
+@@ -1227,11 +1252,14 @@ let
          (
            if type.merge ? v2 then
              let
 +              doMerge = loc: defs: (type.merge.v2 {
 +                inherit loc defs;
 +              }).value;
-               r = type.merge.v2 {
-                 inherit loc;
--                defs = defsFinal;
-+                defs = defsApplied doMerge;
-               };
+               # Check for v2 merge coherence
+               r = checkV2MergeCoherence loc type (
+                 type.merge.v2 {
+                   inherit loc;
+-                  defs = defsFinal;
++                  defs = defsApplied doMerge; # (= defsFinal without mkApply)
+                 }
+               );
              in
-             r
-@@ -1357,7 +1385,11 @@ let
+@@ -1386,7 +1414,11 @@ let
          else
            def;
        defs' = map strip defs;
@@ -102,7 +104,7 @@ index e91a4d2afb92..16d9aa7247f0 100644
      in
      sort compare defs';
  
-@@ -1484,6 +1516,11 @@ let
+@@ -1508,6 +1540,11 @@ let
    defaultOrderPriority = 1000;
    mkAfter = mkOrder 1500;
  
@@ -114,7 +116,7 @@ index e91a4d2afb92..16d9aa7247f0 100644
    # Convenient property used to transfer all definitions and their
    # properties from one option to another. This property is useful for
    # renaming options, and also for including properties from another module
-@@ -2184,6 +2221,7 @@ private
+@@ -2206,6 +2243,7 @@ private
      mkAliasIfDef
      mkAliasOptionModule
      mkAliasOptionModuleMD
@@ -123,7 +125,7 @@ index e91a4d2afb92..16d9aa7247f0 100644
      mkBefore
      mkChangedOptionModule
 diff --git a/lib/tests/modules.sh b/lib/tests/modules.sh
-index 5cd781752317..859a9ac71938 100755
+index 505c1c5a5fe4..9feafe7fe5e7 100755
 --- a/lib/tests/modules.sh
 +++ b/lib/tests/modules.sh
 @@ -157,6 +157,8 @@ checkConfigError() {

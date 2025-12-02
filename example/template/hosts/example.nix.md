@@ -22,7 +22,7 @@ in { preface = {
 
 }; imports = [ ({ ## Hardware
 
-    nixpkgs.hostPlatform = "x86_64-linux"; system.stateVersion = "23.11";
+    nixpkgs.hostPlatform = "x86_64-linux"; system.stateVersion = "25.11";
 
     boot.loader.systemd-boot.enable = true;
     setup.bootpart.enable = true;

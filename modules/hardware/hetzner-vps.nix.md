@@ -42,8 +42,8 @@ in {
 
     config = lib.mkIf cfg.enable ({
 
-        boot.loader.extlinux.enable = pkgs.system == "x86_64-linux";
-        boot.loader.systemd-boot.enable = pkgs.system == "aarch64-linux";
+        boot.loader.extlinux.enable = pkgs.stdenv.hostPlatform.system == "x86_64-linux";
+        boot.loader.systemd-boot.enable = pkgs.stdenv.hostPlatform.system == "aarch64-linux";
         ${installer}.scripts.hetzner-deploy.path = ./hetzner-deploy-vps.sh;
 
         networking.interfaces.eth0.useDHCP = true;

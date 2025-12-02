@@ -30,6 +30,14 @@ in { preface = {
     setup.temproot.local.type = "zfs";
     setup.temproot.remote.type = "zfs";
 
+    wip.experiments.indirect-service-env.enable = true;
+
+    wip.experiments.noexec.enable = true;
+    wip.experiments.noexec.execPaths = { # test whether modifying/adding mount points works:
+        "/tmp" = true; # modifying an existing mount
+        "/var/bin" = true; # adding a new mount point
+    };
+
 
 }) ({ ## Base Config
 
@@ -52,7 +60,7 @@ in { preface = {
 
     services.getty.autologinUser = "root"; users.users.root.hashedPasswordFile = config.age.secrets."shadow/${"root"}".path; # »toor«
 
-    systemd.services."serial-getty@".conflicts = [ "debug-shell.service"];
+    systemd.services."serial-getty@".conflicts = [ "debug-shell.service" ];
     boot.kernelParams = [ "rd.systemd.debug_shell=ttyS0" "systemd.debug_shell=ttyS0" ]; # in the initrd this works fine, in stage 2 it does not work (on ttyS0?)
 
     wip.services.dropbear.enable = true; # root:toor

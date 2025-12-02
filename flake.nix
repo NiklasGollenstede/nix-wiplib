@@ -5,7 +5,7 @@
 ); inputs = {
 
     # To update »./flake.lock«: $ nix flake update
-    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-25.05"; };
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-25.11"; };
     nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; };
     nixos-images = { url = "github:nix-community/nixos-images"; inputs.nixos-stable.follows = "nixpkgs"; inputs.nixos-unstable.follows = "nixpkgs"; };
     functions = { url = "github:NiklasGollenstede/nix-functions"; inputs.nixpkgs.follows = "nixpkgs"; };
@@ -14,7 +14,13 @@
     systems.url = "github:nix-systems/default";
     config.url = "github:NiklasGollenstede/nix-wiplib?dir=example/defaultConfig"; # "path:./example/defaultConfig"; # (The latter only works with nix >= 2.26. The former effectively points to the last commit, i.e. it takes two commits to apply changes to the default config.)
 
-}; outputs = inputs@{ self, ... }: inputs.functions.lib.importRepo inputs ./. (repo@{ overlays, ... }: let
+}; outputs = inputs: let patches = {
+
+    nixpkgs = [
+        ./patches/nixpkgs/mkApply-25-11.patch
+    ];
+
+}; in inputs.functions.lib.patchFlakeInputsAndImportRepo inputs patches ./. (inputs: repo: let
     lib = repo.lib.__internal__;
 in [ # Run »nix flake show« to see what this merges to:
 
@@ -22,17 +28,17 @@ in [ # Run »nix flake show« to see what this merges to:
     ## Exports
 
     repo # lib.* nixosModules.* overlays.* (legacy)packages.*.* patches.*
-    { templates.default = { path = "${self}/example/template"; description = "NixOS host(s) configuration"; }; }
+    { templates.default = { path = "${inputs.self}/example/template"; description = "NixOS host(s) configuration"; }; }
 
 
     ## Examples:
 
-    (lib.inst.mkSystemsFlake { inherit inputs; hosts.dir = "${self}/example/hosts"; asDefaultPackage = true; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems/.default
+    (lib.inst.mkSystemsFlake { inherit inputs; hosts.dir = "${inputs.self}/example/hosts"; asDefaultPackage = true; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems/.default
 
     (lib.wip.mkSecretsApp {
         inherit inputs; secretsDir = "example/secrets";
         adminPubKeys = { "${builtins.readFile ./example/ssh-dummy-key.pub}" = ".*"; };
-        getPrivateKeyPath = pkgs: "echo ${self}/example/ssh-dummy-key"; # Don't try this at home!
+        getPrivateKeyPath = pkgs: "echo ${inputs.self}/example/ssh-dummy-key"; # Don't try this at home!
     })
 
     (lib.fun.forEachSystem (import inputs.systems) (localSystem: let

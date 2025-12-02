@@ -133,7 +133,7 @@ in let vps-worker = ({
     pkgs, # The nixpkgs instance used to build the worker management scripts.
     inputs ? defaultInputs, # The flake inputs used to evaluate the worker's config.
     inheritFrom ? null, # Optional nixOS configuration from which to inherit locale settings and the like.
-    serverType ? serverTypes.cpx11, vpsSystem ? "${serverType.isa}-linux", buildPlatform ? vpsSystem, # pkgs.system
+    serverType ? serverTypes.cpx11, vpsSystem ? "${serverType.isa}-linux", buildPlatform ? vpsSystem, # pkgs.stdenv.hostPlatform.system
     tokenFile ? null, # File containing the Hetzner Cloud API token (»HCLOUD_TOKEN«). Only relevant if neither the environment variable »HCLOUD_TOKEN« nor the »tokenCmd« argument are set.
     tokenCmd ? (if tokenFile == null then "echo 'Environment variable HCLOUD_TOKEN must be set!' 1>&2 ; false" else "cat ${lib.escapeShellArg tokenFile}"),
     suppressCreateEmail ? true, # Suppress the email upon server creation. This requires the cloud project to have an SSH key named `dummy` (with any key value).
@@ -190,7 +190,7 @@ in let vps-worker = ({
 
     }) (lib.mkIf (!noFS) { ## Basic FS Setup
         setup.bootpart.enable = true;
-        setup.bootpart.size = if pkgs.system == "x86_64-linux" then "128M" else "256M"; # will only ever store one boot configuration
+        setup.bootpart.size = if pkgs.stdenv.hostPlatform.system == "x86_64-linux" then "128M" else "256M"; # will only ever store one boot configuration
         setup.temproot.enable = true;
         services.logind.extraConfig = "RuntimeDirectorySize=0\nRuntimeDirectoryInodesMax=0\n"; # adjusts the size of »/run/user/X/«
         setup.temproot.temp.mounts."/tmp".options = lib.mkIf (!useZfs) { size = 0; nr_inodes = 0; }; # nix build dirs get placed here, no this needs lots of space (but we have swap for that)
@@ -254,7 +254,7 @@ in let vps-worker = ({
             sgdisk="$sgdisk"' ${createPart config.setup.disks.devices.primary config.setup.disks.partitions."swap-${hash}"} '
             ${pkgs.gptfdisk}/bin/sgdisk $sgdisk /dev/sda
             ${pkgs.parted}/bin/partprobe /dev/sda || true
-            ${lib.optionalString (pkgs.system == "x86_64-linux") ''
+            ${lib.optionalString (pkgs.stdenv.hostPlatform.system == "x86_64-linux") ''
                 dd bs=440 conv=notrunc count=1 if=${pkgs.syslinux}/share/syslinux/mbr.bin of=/dev/sda status=none || fail
             ''}
 
