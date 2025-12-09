@@ -9,7 +9,10 @@ function prepare-installer--secrets {
     else
         rootKeyDir=$( mktemp -d ) && prepend_trap 'rm -rf $rootKeyDir' EXIT || exit
         @{native.nix}/bin/nix --extra-experimental-features 'nix-command flakes' run @{inputs.self}'#'secrets -- ${args[decryption-identity]:+ --identity "${args[decryption-identity]}" } decrypt::@{config.wip.services.secrets.secretsDir:?}/@{config.wip.services.secrets.rootKeyEncrypted:?}.age | install /dev/stdin -m 600 $rootKeyDir/rootKeyDecrypted || exit
-        args[vm-shared]=$rootKeyDir
+        if [[ "$(id -u)" != '0' && ! ${args[no-vm]:-} ]] || [[ ${args[vm]:-} ]] ; then
+            if [[ ${args[vm-shared]:-} ]] ; then echo "Passing --vm-shared(=${args[vm-shared]}) is currently incompatible with root key decryption." >&2 ; \exit 1 ; fi
+        fi
+        args[vm-shared]=$rootKeyDir # do this even when seemingly irrelevant, just in case
     fi
 }
 

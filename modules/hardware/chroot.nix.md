@@ -110,9 +110,10 @@ Things the Nix installer did that we want:
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS hardware config:
-dirname: inputs: moduleArgs@{ config, options, pkgs, lib, utils, ... }: let lib = inputs.self.lib.__internal__; in let
+dirname: inputs: moduleArgs@{ config, options, pkgs, lib, utils, modulesVersion, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = inputs.config.prefix;
     cfg = config.${prefix}.hardware.chroot;
+    systemBuilderCommands = if modulesVersion >= "25.11" then "systemBuilderCommands" else "extraSystemBuilderCmds";
 in ({
 
     options.${prefix} = { hardware.chroot = {
@@ -266,7 +267,7 @@ in {
         '';
     }) users);
 
-    system.extraSystemBuilderCmds = ''
+    system.${systemBuilderCommands} = ''
         ln -sT ${config.nix.package} $out/nix # target of /host/nix/var/nix/profiles/default
         install -T <(cat << "#EOF"${"\n" +''
             #!${if cfg.mode == "root" then pkgs.runtimeShell else "/usr/bin/env bash"}

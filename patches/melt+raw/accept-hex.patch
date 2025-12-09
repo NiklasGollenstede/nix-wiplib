@@ -1,3 +1,37 @@
+diff --git a/cmd/melt/main.go b/cmd/melt/main.go
+index 18d12c0..e83b228 100644
+--- a/cmd/melt/main.go
++++ b/cmd/melt/main.go
+@@ -386,12 +386,12 @@ func getWordlist(language string) []string {
+ }
+ 
+ func readPassword(msg string) ([]byte, error) {
+-	_, _ = fmt.Fprint(os.Stderr, msg)
+ 	t, err := tty.Open()
+ 	if err != nil {
+ 		return nil, fmt.Errorf("could not open tty: %w", err)
+ 	}
+ 	defer t.Close() //nolint: errcheck
++	_, _ = fmt.Fprint(os.Stderr, msg)
+ 	pass, err := term.ReadPassword(int(t.Input().Fd()))
+ 	if err != nil {
+ 		return nil, fmt.Errorf("could not read passphrase: %w", err)
+@@ -408,12 +408,13 @@ func askNewPassphrase() ([]byte, error) {
+ 	defer fmt.Fprintf(os.Stderr, "\n")
+ 	pass, err := readPassword("Enter new passphrase (empty for no passphrase): ")
+ 	if err != nil {
+-		return nil, err
++		_, _ = fmt.Fprint(os.Stderr, "Could not read passphrase, not setting one.\n")
++		return ([]byte{}), nil
+ 	}
+ 
+ 	confirm, err := readPassword("\nEnter same passphrase again: ")
+ 	if err != nil {
+-		return nil, fmt.Errorf("could not read password confirmation for key: %w", err)
++		return nil, fmt.Errorf("could not read passphrase confirmation for key: %w", err)
+ 	}
+ 
+ 	if !bytes.Equal(pass, confirm) {
 diff --git a/melt.go b/melt.go
 index 8942ab1..895d23c 100644
 --- a/melt.go

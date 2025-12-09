@@ -41,9 +41,9 @@ in {
     getPrivateKeyFromYubikeyChallenge = { challenge, slot ? "2", keyPath ? ''/run/user/"$UID"/"$challenge".key'', }: (pkgs: ''
         challenge=${challenge} ; slot=${slot} ; keyPath=${keyPath} # not escaped on purpose, to allow for evil wizardry
         if [[ ! -e $keyPath ]] ; then
-            read -p 'Generating private get by challenging YubiKey (slot '"$slot"') with "'"$challenge"'". Enter to continue, or Ctrl+C to abort:'
+            read -p 'No --identity was passed an it is not yet cached (in '"$keyPath"'). Regenerating the private by challenging YubiKey (slot '"$slot"') with "'"$challenge"'". Enter to continue, or Ctrl+C to abort:'
             seed=$( ${pkgs.yubikey-personalization}/bin/ykchalresp -"$slot" "$challenge" ) || exit
-            <<<"$seed" ${pkgs.coreutils}/bin/sha256sum - | ${pkgs.coreutils}/bin/head -c 64 | ${lib.getExe pkgs.melt-raw} restore "$keyPath" >&2 || exit
+            <<<"$seed" ${pkgs.coreutils}/bin/sha256sum - | ${pkgs.coreutils}/bin/head -c 64 | ${pkgs.util-linux}/bin/setsid -- ${lib.getExe pkgs.melt-raw} restore "$keyPath" >&2 || exit
             echo 'Public key: '"$( cat "$keyPath".pub )" >&2
         fi ; echo "$keyPath"
     '');

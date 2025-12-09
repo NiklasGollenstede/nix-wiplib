@@ -23,4 +23,11 @@ in rec {
         hosts.configs.${name} = { imports = [ config ]; config.${prefix}.hardware.kexec.enable = true; };
     }).nixosConfigurations.${name}; in system // { inherit (system.config.system.build) kexecRun kexecTarball kernel netbootRamdisk; };
 
+    ## When set as `config.assertions` of a NixOS module, this removes all assertions that were defined in the given `file`, avoiding both the result and evaluation of the assertions.
+    #  Example: `config.assertions = lib.wip.removeAssertionsFrom "${modulesPath}/foo/bar.nix";`
+    removeAssertionsFrom = file: lib.mkApply (builtins.filter (attrs: let pos = builtins.unsafeGetAttrPos "assertion" attrs; in pos == null || pos.file != file));
+
+    # (Shallowly) tries to evaluate and return `danger`, and returns `fallback` if the former fails.
+    try = danger: fallback: let attempt = builtins.tryEval danger; in if attempt.success then attempt.value else fallback;
+
 }
