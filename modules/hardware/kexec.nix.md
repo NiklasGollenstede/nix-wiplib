@@ -68,6 +68,7 @@ in ({
 
     imports = [
         (enableIf cfg.enable "${modulesPath}/installer/netboot/netboot.nix")
+        (lib.mkIf cfg.enable { fileSystems."/nix/store" = lib.mkImageMediaOverride { options = [ "exec" ]; }; })
         (enableIf cfg.enable "${modulesPath}/profiles/minimal.nix")
         (enableIf cfg.enable "${inputs.nixos-images}/nix/restore-remote-access.nix") # boot.initrd.systemd.services.restore-state-from-initrd
     ];
@@ -102,9 +103,7 @@ in {
         '' + (lib.fun.extractLineAnchored ''mkdir kexec [$]out'' true true old.runCommand).without;
     }));
 
-    boot.initrd.systemd.services.restore-state-from-initrd.script = lib.mkForce ''
-        cp -aT /extra /sysroot
-    '';
+    boot.initrd.systemd.services.restore-state-from-initrd.script = lib.mkForce ''cp -aT /extra /sysroot'';
     systemd.services.restore-network = lib.mkIf cfg.applyInheritedIpSetup (import inputs.nixos-images.nixosModules.kexec-installer moduleArgs).config.systemd.services.restore-network;
 
     # Both providing multiple microcode archives to prepend and applying them during kexec seems to be working just fine:

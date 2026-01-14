@@ -43,7 +43,7 @@ else
     initrd=@{config.system.build.netbootRamdisk}/initrd
     cmdline=init=@{config.system.build.toplevel}/init$( printf ' %s' "@{config.boot.kernelParams[@]}" )
     rootKeyEncrypted=@{args.rootKeyEncrypted}
-    rootKeyDecrypted=@{config.age.identityPaths!head}
+    rootKeyDecrypted=@{config.age.identityPaths[0]:-}
     hasRootKey=${rootKeyEncrypted:+1}
 fi
 
@@ -119,6 +119,7 @@ if printf "%s\n" "6.1" "$(uname -r)" | sort -c -V 2>&1 ; then kexec+=( --kexec-s
 if [[ ${args[reboot]:-} ]] ; then
     $sudo ${systemctlPath:-systemctl} kexec
 elif [[ ${args[reset]:-} ]] ; then
+    echo "Resetting into kexec kernel" >&2
     $sudo kexec --exec
 else
     echo "System loaded. Run 'systemctl kexec' or 'kexec --exec' to reboot into the new kernel."

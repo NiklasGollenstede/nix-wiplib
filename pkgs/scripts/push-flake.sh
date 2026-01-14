@@ -4,7 +4,7 @@ description="Pushes a Nix »flake« (default: .) and its local inputs to a remot
 "
 argvDesc='target [flake]'
 declare -g -A allowedArgs=(
-    [--types=indirect,path,git+ssh]="The types of input flakes that will be pushed. Should include all types that the remote won't be able to pull itself."
+    [--types=indirect,path,git+ssh,git+file]="The types of input flakes that will be pushed. Should include all types that the remote won't be able to pull itself."
     [-r, --register[=<name>]]="Register the flake in the target's (user) flake registry as »name«, or the name of the flake directory as inferred from »\$flake«. The »\$target« has to be an SSH [user@]hostname/IP. Specifically, this (re-)places an entry »from:{type:indirect,id:\$name},to:<pushed>« in »\$target:.config/nix/registry.json«."
 )
 details="
@@ -24,7 +24,12 @@ elif [[ ${args[register]:-} ]] ; then
 fi
 
 flakeSpec=${argv[1]:-.}
-if [[ $flakeSpec == git+file:///* ]] ; then
+if [[ $flakeSpec == path:* ]] ; then
+    flakeSpec=${flakeSpec##path:}
+    flakeSpec=$( realpath -- "${flakeSpec:-.}" ) || exit
+    flakeLock=${flakeSpec}/flake.lock
+    flakeSpec=path:$flakeSpec
+elif [[ $flakeSpec == git+file:///* ]] ; then
     flakeLock=${flakeSpec##git+file://}
     flakeLock=${flakeLock/?dir=//}/flake.lock
 else
@@ -45,19 +50,24 @@ storePaths=( $( PATH=@{pkgs.git}/bin:$PATH @{pkgs.nix}/bin/nix --extra-experimen
     to-outPath = builtins.listToAttrs (map (input: { name = input.narHash; value = input.outPath; }) (let getInputs = flake: [ flake ] ++ (map getInputs (builtins.attrValues (flake.inputs or { }))); in flatten (map getInputs (builtins.attrValues inputs))));
     flatten = x: if builtins.isList x then builtins.concatMap (y: flatten y) x else [ x ];
     types = builtins.filter builtins.isString (builtins.split "," localTypes);
+    is-git-with = spec: proto: spec.type == "git" && builtins.substring 0 (1 + builtins.length proto) spec.url == "${proto}:";
 in builtins.concatStringsSep " " ([ flake.outPath ] ++ (map (name: (
     to-outPath.${lock.nodes.${name}.locked.narHash}
+    or inputs.${lock.nodes.root.inputs.${name}}.outPath # If the lock file was created with --override-input on a (direct) input, then its hash may mismatch, but direct inputs can be found this way.
 )) (
     builtins.filter (name: true
         && lock.nodes.${name}?locked.narHash # relative paths do not have a narHash, but are contained in some other input anyway
         && lock.nodes.${name}?original
         && (false
-            || (builtins.elem lock.nodes.${name}.original.type types)
-            || (builtins.elem "git+ssh" types && lock.nodes.${name}.original.type == "git" && builtins.substring 0 6 lock.nodes.${name}.original.url == "ssh://")
+            || (builtins.elem lock.nodes.${name}.original.type types) || (builtins.elem lock.nodes.${name}.locked.type types)
+            || (builtins.elem "git+ssh" types && is-git-with lock.nodes.${name}.original "ssh")
+            || (builtins.elem "git+file" types && is-git-with lock.nodes.${name}.original "file")
         )
     ) (builtins.attrNames lock.nodes)
-))); }' --argstr flakeLock "$flakeLock" --argstr flakeSpec "$flakeSpec" --argstr localTypes "${args[types]:-indirect,path,git+ssh}" --raw -- result ) ) || exit
+))); }' --argstr flakeLock "$flakeLock" --argstr flakeSpec "$flakeSpec" --argstr localTypes "${args[types]:-indirect,path,git+ssh,git+file}" --raw -- result ) ) || exit
 : ${storePaths[0]:?}
+
+#echo 'Pushing' "${storePaths[@]}" >&2
 
 if [[ ${args[register]:-} ]] ; then storePaths+=( @{pkgs.jq} ) ; fi
 

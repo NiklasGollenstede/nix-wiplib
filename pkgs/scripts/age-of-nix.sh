@@ -159,7 +159,7 @@ function operation-genkey-ssh { # 1: secretFullPath, 2?: options=comment
 function operation-genkey-tls { # 1: secretFullPath, 2?: options=hostname
     hostname=$2 ; keyOpts=( -algorithm ED25519 ) #; keyOpts=( -algorithm RSA -pkeyopt rsa_keygen_bits:2048 )
     private=$( @{pkgs.openssl!getExe} genpkey "''${keyOpts[@]}" -out - ) || return
-    encrypt-stdin-to "$1" <"$private" || return
+    encrypt-stdin-to "$1" <<<"$private" || return
     #read -p "For a self-signed CA with a signed server certificate, enter the certs hostname. If empty, an unnamed (client) certificate will be created: " hostname
     # Not sure this makes any sense:
     ext=ca ; [[ $hostname ]] || ext=crt
@@ -174,22 +174,22 @@ function operation-genkey-tls { # 1: secretFullPath, 2?: options=hostname
 function operation-genkey-wg { # 1: secretFullPath, 2?: options=
     no-options "$1" "$2" || return
     private=$( @{pkgs.wireguard-tools}/bin/wg genkey ) || return
-    encrypt-stdin-to "$1" <"$private" || return
+    encrypt-stdin-to "$1" <<<"$private" || return
     git-track "${1%.age}".pub || return
     @{pkgs.wireguard-tools}/bin/wg pubkey <<<"$private" >${1%.age}.pub || return
 }
 function operation-genkey-mkpasswd { # 1: secretFullPath, 2?: options=path
     if [[ $2 ]] ; then
-        private=$( @{pkgs.mkpasswd!getExe} -m sha-512 <"$2" ) || return
+        private=$( @{pkgs.mkpasswd!getExe} --method=sha-512 --stdin <"$2" ) || return
     else
-        private=$( @{pkgs.mkpasswd!getExe} -m sha-512 ) || return
+        private=$( @{pkgs.mkpasswd!getExe} --method=sha-512 ) || return
     fi
-    encrypt-stdin-to "$1" <"$private" || return
+    encrypt-stdin-to "$1" <<<"$private" || return
 }
 function operation-genkey-random { # 1: secretFullPath, 2?: options=args
     private=$( @{pkgs.openssl!getExe} rand ${2:- -base64 32 } ) || return
     printf "Generated random key in %s: %s\n" "$1" "$private"
-    encrypt-stdin-to "$1" <"$private" || return
+    encrypt-stdin-to "$1" <<<"$private" || return
 }
 
 defaultOperation=

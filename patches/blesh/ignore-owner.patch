@@ -1,0 +1,22 @@
+diff --git a/ble.sh b/ble.sh
+index ab08fb5..75494d4 100644
+--- a/ble.sh
++++ b/ble.sh
+@@ -1782,16 +1782,13 @@ function ble/base/.create-user-directory {
+       ble/util/print "ble.sh: cannot create a directory '$dir' since there is already a file." >&2
+       return 1
+     fi
+-    if ! (umask 077; ble/bin/mkdir -p "$dir" && [[ -O $dir ]]); then
++    if ! (umask 077; ble/bin/mkdir -p "$dir"); then
+       ble/util/print "ble.sh: failed to create a directory '$dir'." >&2
+       return 1
+     fi
+   elif ! [[ -r $dir && -w $dir && -x $dir ]]; then
+     ble/util/print "ble.sh: permission of '$dir' is not correct." >&2
+     return 1
+-  elif [[ ! -O $dir ]]; then
+-    ble/util/print "ble.sh: owner of '$dir' is not correct." >&2
+-    return 1
+   fi
+   builtin eval "$var=\$dir"
+ }

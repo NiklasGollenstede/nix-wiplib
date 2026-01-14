@@ -1,0 +1,87 @@
+diff --git a/pyperformance/cli.py b/pyperformance/cli.py
+index d882272..a0fccf6 100644
+--- a/pyperformance/cli.py
++++ b/pyperformance/cli.py
+@@ -62,6 +62,7 @@ def parse_args():
+     cmd = subparsers.add_parser(
+         'run', help='Run benchmarks on the running python')
+     cmds.append(cmd)
++    cmd.add_argument("--venv", help="Path to the virtual environment")
+     cmd.add_argument("-r", "--rigorous", action="store_true",
+                      help=("Spend longer running tests to get more"
+                            " accurate results"))
+@@ -87,6 +88,7 @@ def parse_args():
+     cmd.add_argument("--min-time", metavar="MIN_TIME",
+                      help="Minimum duration in seconds of a single "
+                      "value, used to calibrate the number of loops")
++    cmd.add_argument("--loops", help="Run each benchmark for exactly these many loops.")
+     cmd.add_argument("--same-loops",
+                      help="Use the same number of loops as a previous run "
+                      "(i.e., don't recalibrate). Should be a path to a "
+diff --git a/pyperformance/run.py b/pyperformance/run.py
+index 98d80b1..f8b4ca7 100644
+--- a/pyperformance/run.py
++++ b/pyperformance/run.py
+@@ -79,51 +79,13 @@ def run_benchmarks(should_run, python, options):
+     info = _pythoninfo.get_info(python)
+     runid = get_run_id(info)
+ 
+-    unique = getattr(options, 'unique_venvs', False)
+-    if not unique:
+-        common = VenvForBenchmarks.ensure(
+-            _venv.get_venv_root(runid.name, python=info),
+-            info,
+-            upgrade='oncreate',
+-            inherit_environ=options.inherit_environ,
+-        )
++    common = _venv.VirtualEnvironment(options.venv)
+ 
+     benchmarks = {}
+-    venvs = set()
+     for i, bench in enumerate(to_run):
+         bench_runid = runid._replace(bench=bench)
+         assert bench_runid.name, (bench, bench_runid)
+-        name = bench_runid.name
+-        venv_root = _venv.get_venv_root(name, python=info)
+-        print()
+-        print('='*50)
+-        print(f'({i+1:>2}/{len(to_run)}) creating venv for benchmark ({bench.name})')
+-        print()
+-        if not unique:
+-            print('(trying common venv first)')
+-            # Try the common venv first.
+-            try:
+-                common.ensure_reqs(bench)
+-            except _venv.RequirementsInstallationFailedError:
+-                print('(falling back to unique venv)')
+-            else:
+-                benchmarks[bench] = (common, bench_runid)
+-                continue
+-        try:
+-            venv = VenvForBenchmarks.ensure(
+-                venv_root,
+-                info,
+-                upgrade='oncreate',
+-                inherit_environ=options.inherit_environ,
+-            )
+-            # XXX Do not override when there is a requirements collision.
+-            venv.ensure_reqs(bench)
+-        except _venv.RequirementsInstallationFailedError:
+-            print('(benchmark will be skipped)')
+-            print()
+-            venv = None
+-        venvs.add(venv_root)
+-        benchmarks[bench] = (venv, bench_runid)
++        benchmarks[bench] = (common, bench_runid)
+     print()
+ 
+     suite = None
+@@ -161,6 +123,8 @@ def run_benchmarks(should_run, python, options):
+ 
+         if name in loops:
+             pyperf_opts = [*base_pyperf_opts, f"--loops={loops[name]}"]
++        elif options.loops is not None:
++            pyperf_opts = [*base_pyperf_opts, f"--loops={(int(options.loops))}"]
+         else:
+             pyperf_opts = base_pyperf_opts
+ 

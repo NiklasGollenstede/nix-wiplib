@@ -20,7 +20,7 @@ function post-mount--secrets {
     if [[ ! @{config.wip.services.secrets.enable:-} || ! @{config.wip.services.secrets.rootKeyEncrypted:-} || ${args[no-root-key]:-} ]] ; then return ; fi
     if [[ ! ${rootKeyDir:-} || ! -e $rootKeyDir/rootKeyDecrypted ]] ; then echo "Root key is missing: »$rootKeyDir«" >&2 ; \return 1 ; fi
     #local target=/etc/ssh/rootKeyDecrypted ; if [[ -L $target ]] ; then target=$( readlink @{config.system.build.toplevel}$target ) ; fi
-    local target=@{config.age.identityPaths!head:?}
+    local target=@{config.age.identityPaths[0]:?}
     mkdir -p $mnt/$( dirname "$target" )
     ( ${_set_x:-:} ; install -m 600 -o root -g root -T $rootKeyDir/rootKeyDecrypted $mnt/"$target" ) || exit
 }

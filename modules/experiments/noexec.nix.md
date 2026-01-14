@@ -33,11 +33,16 @@ This currently requires the [mkApply](patches/nixpkgs/mkApply-25-11.patch) patch
 
 ```nix
 #*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: moduleArgs@{ config, options, pkgs, lib, name, ... }: let lib = inputs.self.lib.__internal__; in let
+dirname: inputs: { config, options, pkgs, lib, name, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = inputs.config.prefix;
     cfg = config.${prefix}.experiments.noexec;
-    opts = options.${prefix}.experiments.noexec;
     specialFileSystems = [ "/dev" "/dev/pts" "/dev/shm" "/proc" "/run" "/run/keys" "/sys" ];
+
+    defaultToNo = options: options
+        ++ lib.optional (!(lib.elem "exec" options) && !(lib.elem "noexec" options)) "noexec"
+        ++ lib.optional (!(lib.elem "suid" options) && !(lib.elem "nosuid" options)) "nosuid"
+        ++ lib.optional (!(lib.elem "dev"  options) && !(lib.elem "nodev"  options)) "nodev"
+    ;
 in {
 
     options.${prefix} = { experiments.noexec = {
@@ -50,31 +55,28 @@ in {
         fix.firefox = lib.mkEnableOption "workaround for Firefox WideVine DRM not working with »noexec« homes" // { default = true; example = false; };
     }; };
 
-    # Default all filesystems to noexec,nosuid,nodev unless explicitly specified otherwise:
-    options.fileSystems = lib.mkOption { type = moduleArgs.lib.types.attrsOf (moduleArgs.lib.types.submodule [ {
-        config = lib.mkIf cfg.enable { options = lib.mkAfter (moduleArgs.lib.mkApply (options: options
-            ++ lib.optional (!(lib.elem "exec" options) && !(lib.elem "noexec" options)) "noexec"
-            ++ lib.optional (!(lib.elem "suid" options) && !(lib.elem "nosuid" options)) "nosuid"
-            ++ lib.optional (!(lib.elem "dev"  options) && !(lib.elem "nodev"  options)) "nodev"
-        )); };
-    } ]); };
-    options.boot.specialFileSystems = lib.mkOption { type = moduleArgs.lib.types.attrsOf (moduleArgs.lib.types.submodule [ {
-        config = lib.mkIf cfg.enable { options = lib.mkAfter (moduleArgs.lib.mkApply (options: options
-            ++ lib.optional (!(lib.elem "exec" options) && !(lib.elem "noexec" options)) "noexec"
-            ++ lib.optional (!(lib.elem "suid" options) && !(lib.elem "nosuid" options)) "nosuid"
-            ++ lib.optional (!(lib.elem "dev"  options) && !(lib.elem "nodev"  options)) "nodev"
-        )); };
-    } ]); };
-
-    config = lib.mkMerge [ {
+    config = lib.mkMerge [ ({
 
         ${prefix}.experiments.noexec = {
             # Never enable this for the installer VM (which it breaks):
             enable = lib.mkIf (config.system.build?isVmExec || config.system.build?isVmExec-aarch64-linux?isVmExec-x86_64-linux) (lib.mkVMOverride false);
-            execPaths = opts.execPaths.default; # (enabling other paths as exec should not remove the defaults)
         };
 
-    } (lib.mkIf cfg.enable (rec { # enforcement for mounts that are not created by fileSystems / boot.specialFileSystems:
+    }) (lib.mkIf cfg.enable ({ # default all filesystems to noexec,nosuid,nodev unless explicitly specified otherwise:
+
+        fileSystems = lib.mkApply (lib.mapAttrs (_: fs: fs // {
+            options = defaultToNo fs.options;
+        }));
+        boot.specialFileSystems = lib.mkApply (lib.mapAttrs (_: fs: fs // {
+            options = defaultToNo fs.options;
+        }));
+    } // (lib.optionalAttrs (options.virtualisation?fileSystems) {
+        virtualisation.fileSystems = lib.mkApply (lib.mapAttrs (device: fs: fs // {
+            options = defaultToNo ((lib.optional (cfg.execPaths?${device}) "exec") ++ fs.options);
+        }));
+
+
+    }))) (lib.mkIf cfg.enable { # enforcement for mounts that are not created by fileSystems / boot.specialFileSystems:
 
         systemd.services."user-runtime-dir@" = {
             overrideStrategy = "asDropin";
@@ -93,7 +95,7 @@ in {
         boot.nixStoreMountOpts = lib.mkOptionDefault [ "exec" ]; # This does not always get applied early enough, so we still need `execPaths."/nix/store" = true`.
 
         # Make the /nix/store non-iterable, to make it harder for unprivileged programs to search the store for programs they should not have access to:
-        fileSystems."/nix".postMountCommands = ''
+        fileSystems."/nix/store".postMountCommands = ''
             chmod -f 1771 $root/nix/store || true # root owned (usually 1775; should still be writable by the build group, and needs to be traversable by everyone)
             chmod -f  750 $root/nix/store/.links || true # root owned (was 755), but no one but the nix daemon should directly access these (and finding an executable file by content hash could be a risk)
         '';
@@ -102,7 +104,7 @@ in {
         nix.settings.allowed-users = [ "root" "@wheel" ]; # This goes hand-in-hand with setting mounts as »noexec«. Cases where a user other than root should build stuff are probably fairly rare. A "real" user might want to, but that is either already in the wheel(/sudo) group, or explicitly adding that user is pretty reasonable.
 
 
-    })) (lib.mkIf cfg.enable { # exceptions
+    }) (lib.mkIf cfg.enable ({ # exceptions
 
         fileSystems = lib.mapAttrs (where: _: fsCfg: { config = {
             options = [ "exec" ]
@@ -114,7 +116,7 @@ in {
             ${where}.options = [ "exec" ];
         } else { }) specialFileSystems;
 
-    }) (lib.mkIf cfg.enable { # exceptions
+    })) (lib.mkIf cfg.enable { # exceptions
 
         boot.specialFileSystems = {
             "/dev" = { options = [ "dev" ]; };

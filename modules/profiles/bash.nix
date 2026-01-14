@@ -1,15 +1,4 @@
-/*
-
-# Bash Defaults
-
-Fairly objectively better defaults for interactive bash shells.
-
-
-## Implementation
-
-```nix
-#*/# end of MarkDown, beginning of NixOS module:
-dirname: inputs: moduleArgs@{ config, options, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
+dirname: inputs: { config, options, pkgs, lib, ... }: let lib = inputs.self.lib.__internal__; in let
     prefix = inputs.config.prefix;
     cfg = config.${prefix}.profiles.bash;
 in {
@@ -64,8 +53,8 @@ in {
             netns-exec = pkgs.writeShellScript "netns-exec" ''ns=$1 ; shift ; /run/wrappers/bin/firejail --noprofile --quiet --netns="$ns" -- "$@"'';
             #netns-exec = ''/run/wrappers/bin/firejail --noprofile --quiet --netns "$@"''; # TODO: check if this works as well / instead
 
-            nix-trace = "nix --option eval-cache false --show-trace";
-            nixos-list-generations = "nix-env --list-generations --profile /nix/var/nix/profiles/system";
+            nix-trace = lib.mkIf config.nix.enable "nix --option eval-cache false --show-trace";
+            nixos-list-generations = lib.mkIf config.nix.enable "nix-env --list-generations --profile /nix/var/nix/profiles/system";
 
         } // (lib.fun.mapMerge (s: user: { # sc* + uc*
 
@@ -81,6 +70,10 @@ in {
         }) { s = ""; u = " --user"; });
 
         programs.bash.blesh.enable = true;
+        systemd.tmpfiles.rules = lib.mkIf (config.programs.bash.blesh.enable) [ # blesh fails if these do not exist
+            (lib.fun.mkTmpfile { type = "d"; path = "/root/.cache"; })
+            (lib.fun.mkTmpfile { type = "d"; path = "/root/.local/state"; })
+        ];
         environment.interactiveShellInit = ''
             if command -v ble-bind &>/dev/null ; then
                 ble-bind -f 'C-RET' 'accept-line' ; ble-bind -f 'S-RET' 'newline' # Shift+Enter -> new line ; Ctrl+Enter -> submit (this requires the terminal to send escape sequences for those key combinations)

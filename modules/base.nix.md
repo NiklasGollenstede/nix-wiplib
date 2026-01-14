@@ -91,16 +91,12 @@ in {
 
         environment.ldso32 = null; # Don't install the /lib/ld-linux.so.2 stub. This saves one instance of nixpkgs.
 
-        virtualisation = lib.fun.mapMerge (vm: { ${vm} = let
-            config' = config.virtualisation.${vm};
-        in {
-            virtualisation.graphics = lib.mkDefault false;
-            virtualisation.writableStore = lib.mkDefault false;
-
-            # BUG(PR): When removing all device definitions, also don't use the »resumeDevice«:
-            boot.resumeDevice = lib.mkIf (!config'.virtualisation?useDefaultFilesystems || config'.virtualisation.useDefaultFilesystems) (lib.mkVMOverride "");
-
-        }; }) [ "vmVariant" "vmVariantWithBootLoader" "vmVariantExec" ];
+        virtualisation = (lib.optionalAttrs (options.virtualisation?graphics) {
+            graphics = lib.mkDefault false;
+        }) // (lib.optionalAttrs (options.virtualisation?writableStore) {
+            writableStore = lib.mkDefault false;
+        });
+        boot.resumeDevice = lib.mkIf (options.virtualisation?useDefaultFilesystems && !config.virtualisation.useDefaultFilesystems) (lib.mkVMOverride "");
 
 
     }) (lib.mkIf (cfg.includeInputs != { }) { # flake things
