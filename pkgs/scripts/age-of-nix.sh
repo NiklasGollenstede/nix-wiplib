@@ -44,13 +44,13 @@ $ age-of-nix --rekey -- genkey-ssh::ssh/hosts/host@newHost $secretsDir/shadow/*
 invalidArgs=2
 missingFile=3
 
-exitCodeOnError=$invalidArgs shortOptsAre=flags generic-arg-parse "$@" || exit
-shortOptsAre=flags generic-arg-help "$binaryName" "$argvDesc" "$description" "$details" || exit
+exitCodeOnError=$invalidArgs shortArgsAre=flags generic-arg-parse "$@" || exit
+shortArgsAre=flags generic-arg-help "$binaryName" "$argvDesc" "$description" "$details" || exit
 exitCodeOnError=$invalidArgs generic-arg-verify || exit
 
 if [[ ${args[trace]:-} ]] ; then declare -p args argv ; set -x ; fi
 
-exitCodeOnError=$missingFile ; eval "@{inputs.functions.lib.intoFlakeDir}" ; unset exitCodeOnError
+exitCodeOnError=$missingFile eval "@{inputs.functions.lib.intoFlakeDir}" || exit
 
 secretsDir=@{args.secretsDir:-${SECRETS_DIR:-./secrets}}
 if [[ ! -d $secretsDir ]] ; then echo "Secrets directory »$secretsDir« does not exist." >&2 ; exit $missingFile ; fi
@@ -193,7 +193,7 @@ function operation-genkey-random { # 1: secretFullPath, 2?: options=args
 }
 
 defaultOperation=
-for operation in edit rekey decrypt genkey-ssh genkey-tls genkey-wg genkey-mkpasswd genkey-random ; do
+for operation in edit rekey decrypt encrypt genkey-ssh genkey-tls genkey-wg genkey-mkpasswd genkey-random ; do
     if [[ ${args[$operation]:-} ]] ; then
         if [[ $defaultOperation ]] ; then echo "Multiple default operations specified: »$defaultOperation« and »$operation«" >&2 ; exit $invalidArgs ; fi
         defaultOperation=$operation

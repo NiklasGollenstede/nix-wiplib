@@ -28,7 +28,12 @@ For convenience, it is already linked there. Simply run:
 In graphical mode, the `kexec` system for some reason does not print boot messages, but after a few seconds it shows the (autologin) prompt:
 ```bash
  cat /check # -> yay
- cat /run/agenix/dummy/kexec # -> deployment works
+ cat /run/agenix/dummy/kexec # -> deployment works!
+```
+
+Alternatively, a dir or tarball that can be extracted and run on any (also non-Nix) Linux system can be built with:
+```bash
+ nix build --no-link .#.nixosConfigurations.kexec.config.system.build.kexecDir
 ```
 
 

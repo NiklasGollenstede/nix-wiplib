@@ -34,15 +34,13 @@ Then:
  nix copy --to ssh://root@$target $kexec
  # ... to directly run it there:
  ssh root@$target -- $kexec --reboot # or see --help
+ # OR build a tarball on your local system and copy it to the $target (which does not need to have Nix installed):
+ tarball=$( nix build --no-link --print-out-paths .#.nixosConfigurations.$name.config.system.build.kexecTarball )
+ scp $tarball root@$target:/tmp/kexec.tar
+ ssh root@$target -- 'mkdir -p /tmp/kexec && tar -xf /tmp/kexec.tar -C /tmp/kexec && /tmp/kexec/kexec-run.sh --reboot' # or see --help
 ```
 
 A complete example can be found in [`example/hosts/kexec.nix.md`](../../example/hosts/kexec.nix.md).
-
-
-## TODOs / Open Questions
-
-* [ ] Do microcode downgrades work?
-* [ ] Fix/test the tarball variant.
 
 
 ## Implementation
@@ -64,6 +62,9 @@ in ({
             Whether to apply IP/route setup as inherited from the host system by the `--inherit-ip-setup` flag.
         ''; type = lib.types.bool; default = true; };
         zswap = lib.mkEnableOption "zswap (in-memory compressed swap). Should help compress stale file system contents in low-memory situations";
+        extraTarCommands = lib.mkOption { description = ''
+            Commands that can modify the tarball contents (by adding/ modifying files to/in cwd).
+        ''; type = lib.types.lines; default = [ ]; };
     }; };
 
     imports = [
@@ -79,29 +80,44 @@ in ({
     hasRootKey = config.${prefix}.services.secrets.enable && config.${prefix}.services.secrets.rootKeyEncrypted != null;
     rootKeyEncrypted = if !hasRootKey then "" else "${config.${prefix}.services.secrets.secretsPath}/${config.${prefix}.services.secrets.rootKeyEncrypted}.age";
 
-    doKexec = doTar: if doTar then
-        throw "coping the script to the tar won't currently work"
-    else pkgs.kexec-run.override (old: {
+    doKexec = doTar: if doTar then (pkgs.writeScript "kexec-run.sh" ''
+        #!/usr/bin/env bash
+        ${builtins.readFile lib.fun.bash.generic-arg-parse}
+        ${builtins.readFile lib.fun.bash.generic-arg-verify}
+        ${builtins.readFile lib.fun.bash.generic-arg-help}
+        ${builtins.readFile pkgs.kexec-run.src}
+    '') else pkgs.kexec-run.override (old: {
         context = { args = { inherit doTar rootKeyEncrypted; }; inherit config; };
     });
 
+    collectFiles = ''
+        rm -rf .attr-* env-vars ; mkdir -p bin
+        ${lib.optionalString hasRootKey ''
+            cp -aT ${esc rootKeyEncrypted} rootKey.age
+            ln -sT ${esc (builtins.head config.age.identityPaths)} rootKey.target
+            cp -aT ${pkgs.pkgsStatic.age}/bin/age bin/age
+        ''}
+        echo init=${config.system.build.toplevel}/init' '${lib.escapeShellArgs config.boot.kernelParams} >>cmdline
+
+        cp -aT "${config.system.build.netbootRamdisk}/initrd" initrd
+        cp -aT "${config.system.build.kernel}/${config.system.boot.loader.kernelFile}" bzImage
+        cp -aT "${doKexec true}" run.sh
+        cp -aT "${pkgs.pkgsStatic.kexec-tools}/bin/kexec" bin/kexec
+        cp -aT "${pkgs.pkgsStatic.iproute2.override { iptables = null; }}/bin/ip" bin/ip
+        ${cfg.extraTarCommands}
+    '';
+
 in {
 
-    system.build.kexecScript = lib.mkForce (pkgs.writeShellScript "kexec-script" ''exec ${lib.getExe config.system.build.kexecRun} "$@"'');
+    system.build.kexecScript = lib.mkForce (lib.getExe config.system.build.kexecRun); #(pkgs.writeShellScript "kexec-script" ''exec ${lib.getExe config.system.build.kexecRun} "$@"'');
     system.build.kexecRun = doKexec false;
 
-    system.build.kexecTarball = lib.mkForce ((import inputs.nixos-images.nixosModules.kexec-installer (moduleArgs // { config = config // { system = config.system // {
-        build = config.system.build // { kexecRun = pkgs.writeScript "kexec-run.sh" "#!/usr/bin/env bash\n${doKexec true}"; }; # broken, see above
-        kexec-installer.name = config.networking.hostName;
-    }; }; })).config.system.build.kexecInstallerTarball.overrideAttrs (old: lib.optionalAttrs hasRootKey {
-        runCommand = ''
-            mkdir kexec $out
-            cp ${esc rootKeyEncrypted} kexec/rootKey.age
-            ln -sT ${esc (builtins.head config.age.identityPaths)} kexec/rootKey.target
-            cp ${pkgs.pkgsStatic.age}/bin/age kexec/age
-            echo init=${config.system.build.toplevel}/init' '${lib.escapeShellArgs config.boot.kernelParams} >kexec/cmdline
-        '' + (lib.fun.extractLineAnchored ''mkdir kexec [$]out'' true true old.runCommand).without;
-    }));
+    system.build.kexecTarball = lib.mkForce (pkgs.runCommand "kexec-${config.networking.hostName}-${pkgs.stdenv.hostPlatform.system}.tar.gz" { } ''
+        ${collectFiles} : ; tar -c -z -v -f $out --mtime=@"$SOURCE_DATE_EPOCH" .
+    '');
+    system.build.kexecDir = pkgs.runCommand "kexec-${config.networking.hostName}-${pkgs.stdenv.hostPlatform.system}" { } ''
+        mkdir $out ; cd $out ; ${collectFiles}
+    '';
 
     boot.initrd.systemd.services.restore-state-from-initrd.script = lib.mkForce ''cp -aT /extra /sysroot'';
     systemd.services.restore-network = lib.mkIf cfg.applyInheritedIpSetup (import inputs.nixos-images.nixosModules.kexec-installer moduleArgs).config.systemd.services.restore-network;

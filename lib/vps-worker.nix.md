@@ -170,7 +170,7 @@ in let vps-worker = ({
         boot.enableContainers = config.containers != { }; # It i in fact not "at no cost if containers are not actually used"
         environment.defaultPackages = lib.mkDefault [ ]; # default: nano perl rsync strace
         programs.nano.syntaxHighlight = lib.mkDefault false; # depends on nano
-        system.disableInstallerTools = lib.mkDefault false; # "Disable nixos-rebuild, nixos-generate-config, nixos-installer and other NixOS tools."
+        system.disableInstallerTools = lib.mkDefault true; # "Disable nixos-rebuild, nixos-generate-config, nixos-installer and other NixOS tools."
         hardware.enableRedistributableFirmware = lib.mkDefault false;
         systemd.managerEnvironment.TZDIR = lib.mkIf (inheritFrom != null) (lib.mkForce "");
         security.polkit.enable = lib.mkDefault false;

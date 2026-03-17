@@ -1,35 +1,40 @@
 set -o pipefail -u
 
-systemDesc='the "'@{config.system.name}'"'; if [[ ! @{config.system.name} ]] ; then systemDesc='a specifically prepared' ; fi
+: ${SCRIPT_DIR:=$( dirname "$( readlink -f "$0" )" )}
+
+withSubstitutions= ; if [[ "@{config.system.name:-}" != '@{config.system.name:-}' ]] ; then withSubstitutions=1 ; fi
+if [[ $withSubstitutions && "@{config.system.name:-}" ]] ; then systemDesc='the "'@{config.system.name}'"' ; else systemDesc='a specifically prepared' ; fi
 description="Boots into $systemDesc NixOS system via »kexec«.
 "
 argvDesc='[kexec-args...]'
 declare -g -A allowedArgs=(
-    [--sudo]="Use »sudo« to run »kexec« and to read key files."
-    [--doas]="Use »doas« to run »kexec« and to read key files."
+    [--sudo]="Use »sudo« to run »kexec« and to read key files (if requested)."
+    [--doas]="Use »doas« to run »kexec« and to read key files (if requested)."
     [-r, --reboot]="Cleanly reboot into the new kernel after running »kexec«."
-    [-f, --reset]="Immediately/force boot the new system, without shutting down the host system."
+    [-f, --reset]="Immediately/force boot the new system, without shutting down the host system. Superseded by »--reboot«."
     [--override-kernel=path]="Boot the kernel at »path« instead of the one intended for the system."
     [-i, --inherit-ip-setup]="(Try to) copy the current IP setup (addresses and routes) into the new system."
     [-u, --inherit-user-auth]="Copy the host's SSH user authentication (of root and the sudo/doas user) files into the new system (as root)."
     [-k, --inherit-host-keys]="Copy the host's SSH host keys into the new system. This is orthogonal to decrypting a bundled host/root key (»--decrypt-with«)."
-    [--decrypt-with=path]="Decrypt the bundled SSH host (and encryption root) key with this private (SSH/age) key. Otherwise, tries the system's host and sudo/doas user's default keys."
+    [--decrypt-with=path]="For systems that bundle an age-encrypted SSH host (and encryption root) key, decrypt that key with this private (SSH/age) key. Otherwise, tries the system's host and sudo/doas user's default keys."
     [-x, --trace]="Enable debug tracing in this script."
 )
 details='
 At minimum, this script simply runs »kexec --load«.
 It can, though, optionally prepare some host-based ad-hoc configuration and decrypted/inherited secrets beforehand. See the flags above.
-'
+' ; if [[ ! $withSubstitutions ]] ; then details+="
+When running from a local dir / tarball, this script uses some static tools included in $SCRIPT_DIR/bin. You can delete those if you would rather use the host system's tools.
+"; fi
 
-exitCodeOnError=2 shortOptsAre=flags generic-arg-parse "$@" || exit
-shortOptsAre=flags generic-arg-help "kexec-run" "$argvDesc" "$description" "$details" || exit
+progName=kexec-run ; if [[ ! $withSubstitutions ]] ; then progName=$SCRIPT_DIR/run.sh ; fi
+exitCodeOnError=2 shortArgsAre=flags generic-arg-parse "$@" || exit
+shortArgsAre=flags generic-arg-help "$progName" "$argvDesc" "$description" "$details" || exit
 exitCodeOnError=2 generic-arg-verify || exit
 
 if [[ ${args[trace]:-} ]] ; then declare -p args argv ; set -x ; fi
 
-if [[ @{args.doTar:-} ]] ; then
-    SCRIPT_DIR=$( dirname "$( readlink -f "$0" )" ) # (whe way the script is composed not, this will not point to the root/extracted tar)
-    PATH=$SCRIPT_DIR:$PATH # some static utilities (which really should be in a ./bin/ subdir) + basic stuff from the host
+if [[ "@{args.doTar:-}" ]] ; then # (implicitly true without substitutions)
+    PATH=$SCRIPT_DIR/bin:$PATH # some static utilities
     kernel=$SCRIPT_DIR/bzImage
     initrd=$SCRIPT_DIR/initrd
     cmdline=$( cat "$SCRIPT_DIR"/cmdline )
@@ -48,8 +53,8 @@ else
 fi
 
 
-cd "$( mktemp -d )" ; trap "rm -rf $( printf %q "$PWD" )" EXIT
-mkdir -p -m 755 root/extra
+tmp=$( mktemp -d ) ; trap "rm -rf $( printf %q "$tmp" )" EXIT
+mkdir -p -m 755 $tmp/root/extra
 
 sudo= ; if [[ ${args[sudo]:-} ]] ; then sudo=${sudoPath:-sudo} ; elif [[ ${args[doas]:-} ]] ; then sudo=${doasPath:-doas} ; fi
 if [[ $sudo ]] ; then sudo="$sudo env PATH=$( printf %q "$PATH" )" ; fi
@@ -65,18 +70,18 @@ if [[ ${args[inherit-user-auth]:-} ]] ; then
         ${DOAS_USER:+/etc/ssh/authorized_keys.d/"$DOAS_USER"} \
         ${DOAS_USER:+"$( sh -c "echo ~$( printf %q "$DOAS_USER" )" )"/.ssh/authorized_keys} \
         ${DOAS_USER:+"$( sh -c "echo ~$( printf %q "$DOAS_USER" )" )"/.ssh/authorized_keys2} \
-    2> /dev/null > authorized_keys || true
-    if [[ -s authorized_keys ]] ; then
-        mkdir -p -m 700 root/extra/root{,/.ssh} || exit
-        install -m 600 authorized_keys root/extra/root/.ssh/authorized_keys || exit
+    2> /dev/null > $tmp/authorized_keys || true
+    if [[ -s $tmp/authorized_keys ]] ; then
+        mkdir -p -m 700 $tmp/root/extra/root{,/.ssh} || exit
+        install -m 600 $tmp/authorized_keys $tmp/root/extra/root/.ssh/authorized_keys || exit
     fi
 fi
 
 if [[ ${args[inherit-host-keys]:-} ]] ; then
     for key in /etc/ssh/ssh_host_*; do
         if [[ -e "$key" ]] ; then
-            mkdir -p -m 755 root/extra/etc{,/ssh} || exit
-            $sudo cat "$key" | install /dev/stdin -m 600 root/extra/etc/ssh/"$( basename "$key" )" || exit
+            mkdir -p -m 755 $tmp/root/extra/etc{,/ssh} || exit
+            $sudo cat "$key" | install /dev/stdin -m 600 $tmp/root/extra/etc/ssh/"$( basename "$key" )" || exit
         fi
     done
 fi
@@ -95,24 +100,24 @@ if [[ $hasRootKey ]] ; then
     ; do if [[ -s $file ]] ; then
         identities+=( --identity="$file" )
     fi ; done ; fi
-    if [[ $rootKeyDecrypted == /root/* ]] ; then mkdir -p -m 700 root/extra/root || exit ; fi
-    if [[ $rootKeyDecrypted == /root/.ssh/* ]] ; then mkdir -p -m 700 root/extra/root/.ssh || exit ; fi
-    mkdir -p =m 755 root/extra/"$( dirname "$rootKeyDecrypted" )" || exit
-    $sudo age --decrypt "${identities[@]}" ${rootKeyEncrypted} | install /dev/stdin -m 600 root/extra/"$rootKeyDecrypted" || exit
+    if [[ $rootKeyDecrypted == /root/* ]] ; then mkdir -p -m 700 $tmp/root/extra/root || exit ; fi
+    if [[ $rootKeyDecrypted == /root/.ssh/* ]] ; then mkdir -p -m 700 $tmp/root/extra/root/.ssh || exit ; fi
+    mkdir -p =m 755 $tmp/root/extra/"$( dirname "$rootKeyDecrypted" )" || exit
+    $sudo "$( which age )" --decrypt "${identities[@]}" ${rootKeyEncrypted} | install /dev/stdin -m 600 $tmp/root/extra/"$rootKeyDecrypted" || exit
 fi
 
 if [[ ${args[inherit-ip-setup]:-} ]] ; then
-    mkdir -p -m 700 root/extra/root{,/network} || exit
-    ip --json addr > root/extra/root/network/addrs.json || exit
-    ip -4 --json route > root/extra/root/network/routes-v4.json || exit
-    ip -6 --json route > root/extra/root/network/routes-v6.json || exit
+    mkdir -p -m 700 $tmp/root/extra/root{,/network} || exit
+    ip --json addr > $tmp/root/extra/root/network/addrs.json || exit
+    ip -4 --json route > $tmp/root/extra/root/network/routes-v4.json || exit
+    ip -6 --json route > $tmp/root/extra/root/network/routes-v6.json || exit
 fi
 
-cp -T "$initrd" initrd && chmod 700 initrd || exit
-( cd root/extra ; echo "Including extra files:" >&2 ; find . ! -type d -not -path ./dummy.json -not -path ./ssh/ssh_host_dummy -printf '- /%P\n' )
-( cd root && find . -print0 | cpio --null --quiet --create --format=newc --reproducible --owner=+0:+0 | gzip -9 >> ../initrd ) || exit
+cp -T "$initrd" "$tmp/initrd" && chmod 700 "$tmp/initrd" || exit
+( cd $tmp/root/extra ; echo "Including extra files:" >&2 ; find . ! -type d -not -path ./dummy.json -not -path ./ssh/ssh_host_dummy -printf '- /%P\n' )
+( cd $tmp/root && find . -print0 | cpio --null --quiet --create --format=newc --reproducible --owner=+0:+0 | gzip -9 >> ../initrd ) || exit
 
-kexec=( $sudo kexec --load "${args[override-kernel]:-${kernel}}" --initrd=./initrd --command-line "$cmdline" )
+kexec=( $sudo kexec --load "${args[override-kernel]:-${kernel}}" --initrd="$tmp/initrd" --command-line "$cmdline" )
 if printf "%s\n" "6.1" "$(uname -r)" | sort -c -V 2>&1 ; then kexec+=( --kexec-syscall-auto ) ; fi # https://github.com/nix-community/nixos-anywhere/issues/264
 "${kexec[@]}" "${argv[@]}" || exit
 

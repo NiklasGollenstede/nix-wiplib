@@ -12,8 +12,8 @@ details="
 »flake« should be a local filesystem path. It can also be a »git+file://«-URL, in which case »dir« is the only supported parameter. Defaults to ».«.
 "
 
-exitCodeOnError=2 shortOptsAre=flags generic-arg-parse "$@" || exit
-shortOptsAre=flags generic-arg-help "push-flake" "$argvDesc" "$description" "$details" || exit
+exitCodeOnError=2 shortArgsAre=flags generic-arg-parse "$@" || exit
+shortArgsAre=flags generic-arg-help "push-flake" "$argvDesc" "$description" "$details" || exit
 exitCodeOnError=2 generic-arg-verify || exit
 
 targetStore=${argv[0]:?The »target« system/store is a required argument.}
@@ -34,7 +34,7 @@ elif [[ $flakeSpec == git+file:///* ]] ; then
     flakeLock=${flakeLock/?dir=//}/flake.lock
 else
     flakeSpec=$( realpath -- "$flakeSpec" ) || exit
-    flakeSpec=$( while true ; do # (this is how nix behaves when passed any type of (non-URL) path)
+    flakeSpec=$( cd "$flakeSpec" && while true ; do # (this is how nix behaves when passed any type of (non-URL) path)
     	if [[ -e flake.nix ]] ; then echo "$PWD" ; break ; fi
         cd .. ; if [[ $PWD == / ]] ; then echo 'Unable to locate a flake.nix in (parent of) provided path' >&2 ; exit 2 ; fi
     done ) || exit
@@ -44,7 +44,7 @@ else
     fi
 fi
 
-storePaths=( $( PATH=@{pkgs.git}/bin:$PATH @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --impure --expr '{ flakeLock, flakeSpec, localTypes, }: { result = let
+storePaths=( $( PATH=@{pkgs.git}/bin:$PATH @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --offline --impure --expr '{ flakeLock, flakeSpec, localTypes, }: { result = let
     lock = builtins.fromJSON (builtins.readFile flakeLock);
     flake = builtins.getFlake flakeSpec; inherit (flake) inputs;
     to-outPath = builtins.listToAttrs (map (input: { name = input.narHash; value = input.outPath; }) (let getInputs = flake: [ flake ] ++ (map getInputs (builtins.attrValues (flake.inputs or { }))); in flatten (map getInputs (builtins.attrValues inputs))));

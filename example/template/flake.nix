@@ -27,5 +27,5 @@
 in [ # Run »nix flake show --allow-import-from-derivation« to see what this merges to:
     repo # lib.* nixosModules.* overlays.* (legacy)packages.*.* patches.*
 
-    (lib.inst.mkSystemsFlake { inherit inputs; }) # nixosConfigurations.* apps.*-linux.* devShells.*-linux.* packages.*-linux.all-systems
+    (lib.inst.mkSystemsFlake { inherit inputs; }) # nixosConfigurations.* apps.*-linux.* packages.*-linux.all-systems
 ]); }

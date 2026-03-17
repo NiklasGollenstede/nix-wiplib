@@ -62,13 +62,11 @@ in {
         boot.kernelParams = lib.mkBefore ([ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail")); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails. »boot.panic_on_fail« also applies to systemd-initrd.
         #boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
-    }) (if modulesVersion >= "25.11" then { # Show unit names instead of descriptions in systemctl status output and during boot.
+
+        # Show unit names instead of descriptions in systemctl status output and during boot.
         systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name"; boot.initrd.systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name";
-    } else {
-        systemd.extraConfig = "StatusUnitFormat=name"; boot.initrd.systemd.extraConfig = "StatusUnitFormat=name";
-    }) ({
-        services.getty.helpLine = lib.mkForce "";
         systemd.services.rtkit-daemon = lib.mkIf (config.security.rtkit.enable) { serviceConfig.LogLevelMax = lib.mkDefault "warning"; }; # spams, and probably irrelevant
+        services.getty.helpLine = lib.mkForce "";
 
         boot.kernel.sysctl = {
             # implicit default (Linux 6.6, 40GB) is 128 (or 8192?)
@@ -89,7 +87,10 @@ in {
             fi
         ''; deps = [ "etc" ]; };
 
-        environment.ldso32 = null; # Don't install the /lib/ld-linux.so.2 stub. This saves one instance of nixpkgs.
+        ## Leanness (disable some things that are usually not needed)
+        boot.bcache.enable = lib.mkDefault false; # Can cache HDD blocks on SSDs, but no one should use HDDs.
+        environment.ldso32 = null; # Default sets a /lib/ld-linux.so.2 that provides a more helpful error than "<binary>: No such file or directory" when trying to run 32-bit non-Nix binaries. But this requires evaluating a 32-bit instance of nixpkgs.
+        system.disableInstallerTools = lib.mkDefault true; # Disables nixos-{rebuild,enter,generate-config} and some other tools, none of which should be used for system that use the nixos-installer flake.
 
         virtualisation = (lib.optionalAttrs (options.virtualisation?graphics) {
             graphics = lib.mkDefault false;

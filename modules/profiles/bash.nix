@@ -69,28 +69,21 @@ in {
 
         }) { s = ""; u = " --user"; });
 
-        programs.bash.blesh.enable = true;
-        systemd.tmpfiles.rules = lib.mkIf (config.programs.bash.blesh.enable) [ # blesh fails if these do not exist
-            (lib.fun.mkTmpfile { type = "d"; path = "/root/.cache"; })
-            (lib.fun.mkTmpfile { type = "d"; path = "/root/.local/state"; })
-        ];
-        environment.interactiveShellInit = ''
-            if command -v ble-bind &>/dev/null ; then
-                ble-bind -f 'C-RET' 'accept-line' ; ble-bind -f 'S-RET' 'newline' # Shift+Enter -> new line ; Ctrl+Enter -> submit (this requires the terminal to send escape sequences for those key combinations)
-            fi
+        programs.bash.interactiveShellInit = builtins.concatStringsSep "" (
+            lib.mapAttrsToList (k: v: if v == null then "" else "function ${k} {\n${v}\n}\n") cfg.functions
+        );
 
-            ${builtins.concatStringsSep "\n" (
-                lib.mapAttrsToList (k: v: if v == null then "" else "function ${k} {\n${v}\n}") cfg.functions
-            )}
-        '';
-        /* programs.bash.promptInit = lib.mkAfter ''
-            if command -v ble-bind &>/dev/null ; then
-                function wip/cmd_timer/preexec {
-                    _wip_cmd_timer_start=$( date +%s%3N )
-                }
-                ble/array#push preexec_functions wip/cmd_timer/preexec
-            fi
-        ''; */ # TODO: use that below ...
+
+    }) ({
+
+        ${prefix} = {
+            programs.blesh.enable = true;
+            programs.blesh.init = ''
+                # Intuitive multiline editing (this requires the terminal to send escape sequences for those key combinations):
+                ble-bind -f 'C-RET' 'accept-line' # Ctrl+Enter -> submit/execute
+                ble-bind -f 'S-RET' 'newline' # Shift+Enter -> new line
+            '';
+        };
 
     }) ({
 
@@ -117,7 +110,7 @@ in {
             export TERM_RECURSION_DEPTH=$(( 1 + ''${TERM_RECURSION_DEPTH:-0} ))
         '';
 
-        environment.interactiveShellInit = lib.mkBefore ''
+        programs.bash.interactiveShellInit = lib.mkBefore ''
             # In REPL mode: remove duplicates from history; don't save commands with a leading space.
             HISTCONTROL=ignoredups:ignorespace
 
@@ -127,13 +120,13 @@ in {
             fi
         '';
     }) ({ # other »interactiveShellInit« (and »shellAliases«) would go in here, being able to overwrite stuff from above, but still also being included in the alias completion below
-        environment.interactiveShellInit = lib.mkAfter ''
+        programs.bash.interactiveShellInit = lib.mkAfter ''
             # enable completion for aliases
-            source ${ pkgs.fetchFromGitHub {
+            source ${ pkgs.runCommandLocal "complete-alias.sh" { } ''cp ${ pkgs.fetchFromGitHub { # https://github.com/cykerway/complete-alias/tags
                 owner = "cykerway"; repo = "complete-alias";
                 rev = "4fcd018faa9413e60ee4ec9f48ebeac933c8c372"; # v1.18 (2021-07-17)
                 sha256 = "sha256-fZisrhdu049rCQ5Q90sFWFo8GS/PRgS29B1eG8dqlaI=";
-            } }/complete_alias
+            } }/complete_alias $out''}
             complete -F _complete_alias "''${!BASH_ALIASES[@]}"
         '';
 
