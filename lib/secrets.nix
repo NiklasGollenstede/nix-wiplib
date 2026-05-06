@@ -20,7 +20,7 @@ in {
         hosts ? inputs.self.nixosConfigurations, # Attribute set of NixOS configurations that need to access secrets. Note that the attribute names may matter for default key locations (see above).
         repoRoot ? inputs.self.outPath, # Path to the root of the flake/repository.
         secretsDir ? "secrets", # Relative path of the dir in `repoRoot` where secrets are stored.
-        appName ? "secrets", # Name of the exported app (`nix run .#$appName -- ...`).
+        appName ? "secrets", # Name (not absolute output path) of the exported app (`nix run .#$appName -- ...`).
     }: let
 
         ageFiles = builtins.filter (lib.hasSuffix ".age") (if builtins.pathExists "${repoRoot}/${secretsDir}" then listDirRecursive "${repoRoot}" "${secretsDir}" else [ ]); # [ "${secretsDir}/**.age" ]
@@ -41,7 +41,7 @@ in {
     getPrivateKeyFromYubikeyChallenge = { challenge, slot ? "2", keyPath ? ''/run/user/"$UID"/"$challenge".key'', }: (pkgs: ''
         challenge=${challenge} ; slot=${slot} ; keyPath=${keyPath} # not escaped on purpose, to allow for evil wizardry
         if [[ ! -e $keyPath ]] ; then
-            read -p 'No --identity was passed an it is not yet cached (in '"$keyPath"'). Regenerating the private by challenging YubiKey (slot '"$slot"') with "'"$challenge"'". Enter to continue, or Ctrl+C to abort:' >&2
+            read -p 'No --identity was passed and it is not yet cached (in '"$keyPath"'). Regenerating the private key by challenging YubiKey (slot '"$slot"') with "'"$challenge"'". Enter to continue, or Ctrl+C to abort:' >&2
             seed=$( ${pkgs.yubikey-personalization}/bin/ykchalresp -"$slot" "$challenge" ) || exit
             <<<"$seed" ${pkgs.coreutils}/bin/sha256sum - | ${pkgs.coreutils}/bin/head -c 64 | ${pkgs.util-linux}/bin/setsid -- ${lib.getExe pkgs.melt-raw} restore "$keyPath" >&2 || exit
             echo 'Public key: '"$( cat "$keyPath".pub )" >&2

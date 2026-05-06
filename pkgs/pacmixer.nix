@@ -18,12 +18,12 @@ lib }: let
     #stdenv = overrideCC stdenv gcc-objc;
     stdenv = llvmPackages.stdenv;
 
-in stdenv.mkDerivation rec {
+in stdenv.mkDerivation (finalAttrs: {
     pname = "pacmixer";
     version = "0.6.4"; # 2023-03-30 / 700c2fee5907e4dda435377f4ed1bd1227b0ccf9
 
     src = fetchFromGitHub { # https://github.com/KenjiTakahashi/pacmixer
-        owner = "KenjiTakahashi"; repo = pname; rev = version;
+        owner = "KenjiTakahashi"; repo = finalAttrs.pname; rev = finalAttrs.version;
         hash = "sha256-2cIrjix7uVw8+etBQooqKItCkTVVLhk2I5+aLx6jtLc=";
     };
     passthru.updateScript = nix-update-script { };
@@ -51,9 +51,9 @@ in stdenv.mkDerivation rec {
     meta = {
         homepage = "https://github.com/KenjiTakahashi/pacmixer";
         description = "An alsamixer alike for PulseAudio";
-        mainProgram = pname;
+        mainProgram = finalAttrs.pname;
         license = lib.licenses.gpl3;
         maintainers = [ ]; # lib.maintainers
         platforms = lib.platforms.linux;
     };
-}
+})

@@ -75,11 +75,7 @@ in {
             # "fs.inotify.max_user_watches" = lib.mkDefault 524288;
         };
 
-        system.${systemBuilderCommands} = lib.mkIf config.boot.initrd.enable ''
-            ln -sT ${builtins.unsafeDiscardStringContext config.system.build.bootStage1} $out/boot-stage-1.sh # (this is super annoying to locate otherwise)
-        ''; # (to deactivate this, set »system.extraSystemBuilderCmds = lib.mkAfter "rm -f $out/boot-stage-1.sh";«)
-
-        wip.base.showDiffOnActivation = lib.mkIf (!config.nix.enable) (lib.mkDefault true);
+        wip.base.showDiffOnActivation = lib.mkIf (!config.nix.enable) (lib.mkDefault false);
         system.activationScripts.diff-systems = lib.mkIf cfg.showDiffOnActivation { text = ''
             if [[ -e /run/current-system && -e $systemConfig/sw/bin/nix && "$(realpath /run/current-system)" != "$systemConfig" ]] ; then
                 ${pkgs.nvd}/bin/nvd --nix-bin-dir=$systemConfig/sw/bin diff "$(realpath /run/current-system)" "$systemConfig"

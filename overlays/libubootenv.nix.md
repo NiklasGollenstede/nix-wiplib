@@ -24,12 +24,12 @@ dirname: inputs: final: prev: let
     inherit (final) pkgs; lib = inputs.self.lib.__internal__;
 in {
 
-    libubootenv = pkgs.stdenv.mkDerivation rec {
+    libubootenv = pkgs.stdenv.mkDerivation (finalAttrs: {
         pname = "libubootenv"; version = "0.3.5";
 
         src = pkgs.fetchFromGitHub {
-            owner = "sbabic"; repo = pname; rev = "3f4d15e36ceb58085b08dd13f3f2788e9299877b"; # 2023-10-08
-            hash = "sha256-i7gUb1A6FTOBCpympQpndhOG9pCDA4P0iH7ZNBqo+PA=";
+            owner = "sbabic"; repo = finalAttrs.pname; rev = "1e3511ed77f794ee5decc0974d54c8e5af26f64c"; # 2025-12-04
+            hash = "sha256-cwF9zIYv+/ifrYMRJWTbLf+yrsTa2tT0Rrvx850FS/c=";
         };
         nativeBuildInputs = [ pkgs.buildPackages.cmake ];
         buildInputs = [ pkgs.libyaml pkgs.zlib ];
@@ -42,5 +42,5 @@ in {
             maintainers = [ ];
             platforms = lib.platforms.linux;
         };
-    };
+    });
 }

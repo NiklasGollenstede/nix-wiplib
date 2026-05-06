@@ -102,7 +102,7 @@ if [[ $hasRootKey ]] ; then
     fi ; done ; fi
     if [[ $rootKeyDecrypted == /root/* ]] ; then mkdir -p -m 700 $tmp/root/extra/root || exit ; fi
     if [[ $rootKeyDecrypted == /root/.ssh/* ]] ; then mkdir -p -m 700 $tmp/root/extra/root/.ssh || exit ; fi
-    mkdir -p =m 755 $tmp/root/extra/"$( dirname "$rootKeyDecrypted" )" || exit
+    mkdir -p -m 755 $tmp/root/extra/"$( dirname "$rootKeyDecrypted" )" || exit
     $sudo "$( which age )" --decrypt "${identities[@]}" ${rootKeyEncrypted} | install /dev/stdin -m 600 $tmp/root/extra/"$rootKeyDecrypted" || exit
 fi
 

@@ -47,14 +47,14 @@ if [[ ! ${argv[0]:-} && ! ${args[name]:-} ]] ; then args[name]=$targetHost ; fi 
 configName=${args[name]:-$( ssh "$targetHost" -T -- hostname )} || exit
 
 if [[ $verb == eval ]] ; then
-    nix eval --extra-experimental-features 'nix-command flakes' --raw .#nixosConfigurations."$configName".config.system.build.toplevel.drvPath "${argv[@]:2}" ; exit
+    nix eval --extra-experimental-features 'nix-command flakes' --raw .#.nixosConfigurations."$configName".config.system.build.toplevel.drvPath "${argv[@]:2}" ; exit
 elif [[ ! ${args[remote-eval]:-} ]] ; then
-    drvPath=$( nix eval --extra-experimental-features 'nix-command flakes' --raw .#nixosConfigurations."$configName".config.system.build.toplevel.drvPath "${argv[@]:2}" ) || exit
+    drvPath=$( nix eval --extra-experimental-features 'nix-command flakes' --raw .#.nixosConfigurations."$configName".config.system.build.toplevel.drvPath "${argv[@]:2}" ) || exit
     if [[ ${argv[0]:-} ]] ; then
         nix --extra-experimental-features nix-command copy --to ssh://"$targetHost" --derivation "$drvPath^*" || exit
     fi # else: localhost -> no need to copy anything
 else
-    drvPath=path:$( @{pkgs.push-flake!getExe} "$targetHost" . )#nixosConfigurations."$configName".config.system.build.toplevel || exit
+    drvPath=path:$( @{pkgs.push-flake!getExe} "$targetHost" . )#.nixosConfigurations."$configName".config.system.build.toplevel || exit
 fi
 
 ssh -t "$targetHost" -- "$( function remote { set -o pipefail -u

@@ -27,6 +27,9 @@ in {
         secretsPath = lib.mkOption { type = lib.types.path; readOnly = true; description = ''
             Content-addressed copy of the `.secretsDir`, to be used when integrating (encrypted) secrets (or their accompanying public keys) into the config.
         '';};
+        appName = lib.mkOption { type = lib.types.str; default = "secrets"; description = ''
+            Name (or absolute output path) as which the flake that defines the system exports the secrets management app. If defined, this has to match the »appName« argument to »lib.${prefix}.mkSecretsApp { ... }«.
+        '';};
     }; };
 
     config = lib.mkIf cfg.enable ({

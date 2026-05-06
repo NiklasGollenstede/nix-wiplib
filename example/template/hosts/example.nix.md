@@ -6,7 +6,7 @@
 
 To test the system locally, run in `..`:
 ```bash
- nix run .#host1 -- run-qemu --install=always
+ nix run .#host1 -- run-qemu --reinstall
 ```
 See `nix run .#host1 -- --help` for options and more commands.
 

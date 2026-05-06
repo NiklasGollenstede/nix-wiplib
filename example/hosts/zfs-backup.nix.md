@@ -7,11 +7,11 @@ This sets up two data-producing "clients" (`server` and `laptop`) that send thei
 To start the VMs, run in `..`:
 ```bash
  mkdir -p /tmp/nixos-vm ; nix shell nixpkgs#vde2 --command vde_switch -sock /tmp/nixos-vm/zfs-net
- nix run .#zfs-server -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
- nix run .#zfs-laptop -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
- nix run .#zfs-relay  -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
- nix run .#zfs-sink1  -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
- nix run .#zfs-sink2  -- run-qemu --install=always --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-server -- run-qemu --reinstall --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-laptop -- run-qemu --reinstall --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-relay  -- run-qemu --reinstall --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-sink1  -- run-qemu --reinstall --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
+ nix run .#zfs-sink2  -- run-qemu --reinstall --vm-mem=4096 --nic=vde,sock=/tmp/nixos-vm/zfs-net
  rm -rf /tmp/nixos-vm/zfs-* # cleanup
 ```
 

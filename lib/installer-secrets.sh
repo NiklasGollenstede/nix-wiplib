@@ -1,18 +1,18 @@
 
 declare-flag install-system decryption-identity "" 'Explicit »--identity« (admin private key) to use to decrypt the root key of the new host.'
-declare-flag install-system no-root-key "" 'Skip decryption and installation of the hosts root key (`config.wip.services.secrets.rootKeyEncrypted` to `builtins.head config.age.identityPaths`), even if the `secrets` module is enabled and configured.'
+declare-flag install-system no-root-key "" 'Skip decryption and installation of the host'\''s root key (`config.wip.services.secrets.rootKeyEncrypted` to `builtins.head config.age.identityPaths`), even if the `secrets` module is enabled and configured.'
 
 function prepare-installer--secrets {
     if [[ ! @{config.wip.services.secrets.enable:-} || ! @{config.wip.services.secrets.rootKeyEncrypted:-} || ${args[no-root-key]:-} ]] ; then return ; fi
-    if [[ ${args[no-vm]:-} && "$(id -u)" == '0' && -e /tmp/shared/rootKeyDecrypted ]] ; then # inside vm
-        rootKeyDir=/tmp/shared
+    if [[ "$(id -u)" == '0' && -e /tmp/shares/rootKeyDir && $( cat /proc/mounts ) == 'rootfs / rootfs'* ]] ; then # inside vm
+        rootKeyDir=/tmp/shares/rootKeyDir
     else
         rootKeyDir=$( mktemp -d ) && prepend_trap 'rm -rf $rootKeyDir' EXIT || exit
-        @{native.nix}/bin/nix --extra-experimental-features 'nix-command flakes' run @{inputs.self}'#'secrets -- ${args[decryption-identity]:+ --identity "${args[decryption-identity]}" } decrypt::@{config.wip.services.secrets.secretsDir:?}/@{config.wip.services.secrets.rootKeyEncrypted:?}.age | install /dev/stdin -m 600 $rootKeyDir/rootKeyDecrypted || exit
-        if [[ "$(id -u)" != '0' && ! ${args[no-vm]:-} ]] || [[ ${args[vm]:-} ]] ; then
-            if [[ ${args[vm-shared]:-} ]] ; then echo "Passing --vm-shared(=${args[vm-shared]}) is currently incompatible with root key decryption." >&2 ; \exit 1 ; fi
-        fi
-        args[vm-shared]=$rootKeyDir # do this even when seemingly irrelevant, just in case
+        nix-wrapped run @{inputs.self}'#'"@{config.wip.services.secrets.appName:?}" -- ${args[decryption-identity]:+ --identity "${args[decryption-identity]}" } decrypt::"@{config.wip.services.secrets.secretsDir:?}"/"@{config.wip.services.secrets.rootKeyEncrypted:?}".age | install /dev/stdin -m 600 $rootKeyDir/rootKeyDecrypted || exit
+        #if [[ "$(id -u)" != '0' && ! ${args[disallow-vm]:-} ]] || [[ ${args[vm]:-} ]] ; then
+        #    if [[ ${args[vm-shared]:-} ]] ; then echo "Passing --vm-shared(=${args[vm-shared]}) is currently incompatible with root key decryption." >&2 ; \exit 1 ; fi
+        #fi
+        declare -g -A vmShares ; vmShares[rootKeyDir]=$rootKeyDir # do this even when seemingly irrelevant, just in case
     fi
 }
 
@@ -29,10 +29,10 @@ copy-function prompt-for-user-passwords{,--before-secrets}
 function prompt-for-user-passwords { # (void)
     if [[ ! @{config.wip.services.secrets.enable:-} ]] ; then prompt-for-user-passwords--before-secrets "$@" ; return ; fi
     declare -g -A userPasswords=( ) # (this ends up in the caller's scope)
-    local user ; for user in "@{!config.users.users!catAttrSets.password[@]}" ; do # Also grab any plaintext passwords for testing setups.
+    local user ; for user in "@{!config.users.users!catAttrSets.password[@]}" ; do # Grab any plaintext passwords for testing setups.
         userPasswords[$user]=@{config.users.users!catAttrSets.password[$user]}
     done
-    #assume that other (hashed) passwords are in secrets # TODO: read those (not hashed)?
+    #assume that other (hashed) passwords are kept in secrets (that can now be decrypted upon activation)
     #"@{!config.users.users!catAttrSets.hashedPasswordFile[@]}"
     #"@{!config.users.users!catAttrSets.passwordFile[@]}"
 }

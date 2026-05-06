@@ -36,9 +36,7 @@ in {
     #  This provides some options for additional onboard hardware components as »hardware.raspberry-pi."4".*«, see: https://github.com/NixOS/nixos-hardware/blob/master/raspberry-pi/4/
     imports = let
         path = "${inputs.nixos-hardware}/raspberry-pi/4/default.nix"; module = import path args;
-    in [ { _file = path; imports = [ {
-        config = lib.mkIf cfg.enable (builtins.removeAttrs module [ "imports" ]);
-    } ]; } ] ++ module.imports;
+    in [ (lib.fun.enableModuleIf cfg.enable path path "#options.${prefix}.hardware.raspberry-pi.enable") ];
 
     config = lib.mkIf cfg.enable (lib.mkMerge [ ({ ## Bootloader
 

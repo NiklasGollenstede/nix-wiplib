@@ -6,7 +6,7 @@
 
 To test the system locally, run in `..`:
 ```bash
- nix run .'#'vps -- run-qemu --install=always
+ nix run .'#'vps -- run-qemu --reinstall
 ```
 See `nix run .#vps -- --help` for options and more commands.
 

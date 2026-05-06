@@ -292,7 +292,7 @@ in let vps-worker = ({
         done
 
         SUDO_USER= ${lib.inst.writeSystemScripts { inherit system pkgs; }} deploy-system-to-hetzner-vps --inspect-cmd='
-            keys='$( printf %q "$keys" )' ; if [[ ''${args[no-vm]:-} ]] ; then keys=/tmp/shared ; fi # "no-vm" is set inside the VM
+            keys='$( printf %q "$keys" )' ; if [[ ''${args[disallow-vm]:-} ]] ; then keys=/tmp/shared ; fi # "disallow-vm" is set inside the VM
             mkdir -p $mnt/local/etc/ssh/ || exit
             cp -aT "$keys"/loginKey.pub  $mnt/local/etc/ssh/loginKey.pub || exit
             cp -aT "$keys"/hostKey       $mnt/local/etc/ssh/ssh_host_ed25519_key || exit
