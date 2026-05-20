@@ -38,7 +38,7 @@ in {
     # Usable as »mkSecretsApp«'s »getPrivateKeyPath« argument, this generates a admin private (and public) key from a seed that results from a fixed challenge to a YubiKey's HMAC function.
     # The key pair can thus be re-generated with the same YubiKey (or the same HMAC secret), effectively making the YubiKey ('s HMAC secret) the actual key, and the generated key pair only a cache of the (derived) key.
     # The default location of the cached key (»keyPath«) is in »/run/user/« and thus clears the cache on reboot or logout.
-    getPrivateKeyFromYubikeyChallenge = { challenge, slot ? "2", keyPath ? ''/run/user/"$UID"/"$challenge".key'', }: (pkgs: ''
+    getPrivateKeyFromYubikeyChallenge = { challenge, slot ? "2", keyPath ? ''/run/user/"$UID"/"$challenge".key'', }: (pkgs: '' # bash
         challenge=${challenge} ; slot=${slot} ; keyPath=${keyPath} # not escaped on purpose, to allow for evil wizardry
         if [[ ! -e $keyPath ]] ; then
             read -p 'No --identity was passed and it is not yet cached (in '"$keyPath"'). Regenerating the private key by challenging YubiKey (slot '"$slot"') with "'"$challenge"'". Enter to continue, or Ctrl+C to abort:' >&2

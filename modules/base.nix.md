@@ -35,17 +35,19 @@ in {
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // byDefault;
     }; };
 
-    config = lib.mkIf cfg.enable (lib.mkMerge [ (
-        lib.optionalAttrs (options.nix.channel?enable) { nix.channel.enable = lib.mkDefault false; }
-    ) ({
+    config = lib.mkIf cfg.enable (lib.mkMerge [ ({
+
         users.mutableUsers = false; users.allowNoPasswordLogin = true; # Don't babysit. Can roll back or redeploy.
         networking.hostId = lib.mkDefault (builtins.substring 0 8 (builtins.hashString "sha256" config.networking.hostName));
         environment.etc."machine-id".text = lib.mkDefault (builtins.substring 0 32 (builtins.hashString "sha256" "${config.networking.hostName}:machine-id")); # Needs to exist (but may be empty) for systemd not to consider this a fresh installation ("first boot"). Also, is used as identifier in logs (vs. containers/VMs). This works, but it "should be considered "confidential", and must not be exposed in untrusted environments". Guess containers/VMs could send fake host system logs?
         documentation.man.enable = lib.mkDefault config.documentation.enable;
 
-        ## Nix
+
+    }) ({ ## Nix
+
         nix.settings.auto-optimise-store = lib.mkDefault true; # file deduplication, see https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-store-optimise.html#description
         nix.settings.experimental-features = [ "nix-command" "flakes" ]; # We will probably not ever get rid of these flags.
+        nix.channel.enable = lib.mkDefault false;
         programs.git.enable = lib.mkIf config.nix.enable (lib.mkDefault true); # Necessary as external dependency when working with flakes.
         nix.settings.ignore-try = lib.mkDefault true; # »nix --debugger« will not break on errors in »try« branches. Use »--option ignore-try false« on the CLI to revert this.
         nix.settings.flake-registry = lib.mkDefault ""; # Disable the global (online) flake registry.
@@ -53,7 +55,9 @@ in {
         nix.settings.tarball-ttl = lib.mkDefault 0; # Flakes('s inputs) should only be updated when asked explicitly, but then always. ("0 forces Nix to always check")
         #nixpkgs.config.warnUndeclaredOptions = lib.mkDefault true; # warn on undeclared nixpkgs.config.*
 
-        ## Boot
+
+    }) ({ ## Boot
+
         hardware.cpu = lib.mkIf (pkgs.stdenv.hostPlatform.system == "x86_64-linux") (let
             updateMicrocode = lib.mkOverride 900 { updateMicrocode = true; }; # (enable this even of »config.hardware.enableRedistributableFirmware == false«, but still allow overriding it without force)
         in { amd = updateMicrocode; intel = updateMicrocode; }); # (seems to be perfectly fine to enable both: kernel extracts both and picks the correct one)
@@ -62,7 +66,11 @@ in {
         boot.kernelParams = lib.mkBefore ([ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail")); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails. »boot.panic_on_fail« also applies to systemd-initrd.
         #boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
-
+        systemd.services = lib.mkIf (config.systemd.enableEmergencyMode && config.services.getty.autologinUser == "root") {
+            emergency.environment = lib.mkDefault { SYSTEMD_SULOGIN_FORCE = "1"; };
+            rescue.environment = lib.mkDefault { SYSTEMD_SULOGIN_FORCE = "1"; };
+        };
+    }) ({
         # Show unit names instead of descriptions in systemctl status output and during boot.
         systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name"; boot.initrd.systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name";
         systemd.services.rtkit-daemon = lib.mkIf (config.security.rtkit.enable) { serviceConfig.LogLevelMax = lib.mkDefault "warning"; }; # spams, and probably irrelevant
@@ -83,17 +91,27 @@ in {
             fi
         ''; deps = [ "etc" ]; };
 
-        ## Leanness (disable some things that are usually not needed)
+
+    }) ({ ## Leanness (disable some things that are usually not needed)
+
         boot.bcache.enable = lib.mkDefault false; # Can cache HDD blocks on SSDs, but no one should use HDDs.
         environment.ldso32 = null; # Default sets a /lib/ld-linux.so.2 that provides a more helpful error than "<binary>: No such file or directory" when trying to run 32-bit non-Nix binaries. But this requires evaluating a 32-bit instance of nixpkgs.
         system.disableInstallerTools = lib.mkDefault true; # Disables nixos-{rebuild,enter,generate-config} and some other tools, none of which should be used for system that use the nixos-installer flake.
+
+
+    }) ({ ## misc
 
         virtualisation = (lib.optionalAttrs (options.virtualisation?graphics) {
             graphics = lib.mkDefault false;
         }) // (lib.optionalAttrs (options.virtualisation?writableStore) {
             writableStore = lib.mkDefault false;
         });
+
         boot.resumeDevice = lib.mkIf (options.virtualisation?useDefaultFilesystems && !config.virtualisation.useDefaultFilesystems) (lib.mkVMOverride "");
+
+        environment.etc = lib.mkIf (config.boot.enableContainers) (lib.fun.mapMerge (name: { config, ... }: {
+            "nixos-containers/${name}/system".source = config.system.build.toplevel;
+        }) config.containers);
 
 
     }) (lib.mkIf (cfg.includeInputs != { }) { # flake things
