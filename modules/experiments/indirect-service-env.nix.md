@@ -25,7 +25,7 @@ in {
     }; };
 
     options.systemd.services = lib.mkOption { type = moduleArgs.lib.types.attrsOf (moduleArgs.lib.types.submodule [ {
-        config = lib.mkIf cfg.enable { path = lib.mkAfter (moduleArgs.lib.mkApply (all: let
+        config = lib.mkIf cfg.enable { path = lib.mkAfter (lib.wip.mkApply (all: let
             tail = lib.takeEnd 5; head = lib.dropEnd 5;
         in if tail == packages then if lib.length all == 5 then null else ( # TODO: This does not seem to ever be true. Why?
             head ++ [ "/run/current-system/default-unit-path" ]

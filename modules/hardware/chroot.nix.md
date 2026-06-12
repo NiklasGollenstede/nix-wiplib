@@ -184,7 +184,7 @@ in ({
             ''
         ) else lib.mkMerge [
             (lib.mkBefore inheritFiles)
-            (lib.mkIf (cfg.mode == "user") (moduleArgs.lib.mkApply (script: let
+            (lib.mkIf (cfg.mode == "user") (moduleArgs.lib.wip.mkApply (script: let
                 strings = builtins.match ''(.*)/nix/store/[a-z0-9]+-update-users-groups[.]pl(.*)'' script;
             in (lib.addContextFrom script (builtins.elemAt strings 0) + patched + (builtins.elemAt strings 1)))))
         ];

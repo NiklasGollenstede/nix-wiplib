@@ -167,7 +167,7 @@ in let vps-worker = ({
     }) ({
 
         documentation.nixos.enable = lib.mkDefault false; # It just takes way to long to make these, and they rebuild way too often ...
-        boot.enableContainers = config.containers != { }; # It i in fact not "at no cost if containers are not actually used"
+        boot.enableContainers = config.containers != { }; # It is in fact not "at no cost if containers are not actually used"
         environment.defaultPackages = lib.mkDefault [ ]; # default: nano perl rsync strace
         programs.nano.syntaxHighlight = lib.mkDefault false; # depends on nano
         system.disableInstallerTools = lib.mkDefault true; # "Disable nixos-rebuild, nixos-generate-config, nixos-installer and other NixOS tools."

@@ -29,7 +29,7 @@ in {
             else { }
         ); };
         selfInputName = lib.mkOption { description = "name of »config.${prefix}.base.includeInputs.self« flake"; type = lib.types.str; default = "nixos-config"; };
-        panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«" // byDefault; # It's stupidly hard to remove items from lists ...
+        panic_on_fail = lib.mkEnableOption "Kernel parameter »boot.panic_on_fail«"; # It's stupidly hard to remove items from lists ...
         showDiffOnActivation = lib.mkEnableOption "showing a diff compared to the previous system on activation of this new system (generation)" // byDefault;
         autoUpgrade = lib.mkEnableOption "automatic NixOS updates and garbage collection" // ifKnowsSelf;
         bashInit = lib.mkEnableOption "pretty defaults for interactive bash shells" // byDefault;
@@ -61,11 +61,12 @@ in {
         hardware.cpu = lib.mkIf (pkgs.stdenv.hostPlatform.system == "x86_64-linux") (let
             updateMicrocode = lib.mkOverride 900 { updateMicrocode = true; }; # (enable this even of »config.hardware.enableRedistributableFirmware == false«, but still allow overriding it without force)
         in { amd = updateMicrocode; intel = updateMicrocode; }); # (seems to be perfectly fine to enable both: kernel extracts both and picks the correct one)
-        boot.initrd.systemd.enable = lib.mkIf (!config.boot.isContainer) (lib.mkDefault true);
+        boot.initrd.systemd.enable = lib.mkIf (!config.boot.isContainer) (lib.mkDefault true); # default since 26.05
         boot.loader.timeout = lib.mkDefault 1; # save 4 seconds on startup
         boot.kernelParams = lib.mkBefore ([ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail")); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails. »boot.panic_on_fail« also applies to systemd-initrd.
         #boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
+        boot.initrd.systemd.emergencyAccess = lib.mkIf (config.systemd.enableEmergencyMode && config.services.getty.autologinUser == "root") (lib.mkDefault true);
         systemd.services = lib.mkIf (config.systemd.enableEmergencyMode && config.services.getty.autologinUser == "root") {
             emergency.environment = lib.mkDefault { SYSTEMD_SULOGIN_FORCE = "1"; };
             rescue.environment = lib.mkDefault { SYSTEMD_SULOGIN_FORCE = "1"; };

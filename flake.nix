@@ -5,18 +5,19 @@
 ); inputs = {
 
     # To update »./flake.lock«: $ nix flake update
-    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-25.11"; };
-    nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; };
+    nixpkgs = { url = "github:NixOS/nixpkgs/nixos-26.05"; };
+    nixos-hardware = { url = "github:NixOS/nixos-hardware/master"; inputs.nixpkgs.follows = "nixpkgs"; };
     nixos-images = { url = "github:nix-community/nixos-images"; inputs.nixos-stable.follows = "nixpkgs"; inputs.nixos-unstable.follows = "nixpkgs"; };
     functions = { url = "github:NiklasGollenstede/nix-functions"; inputs.nixpkgs.follows = "nixpkgs"; };
     installer = { url = "github:NiklasGollenstede/nixos-installer"; inputs.nixpkgs.follows = "nixpkgs"; inputs.functions.follows = "functions"; };
     agenix = { url = "github:ryantm/agenix"; inputs.nixpkgs.follows = "nixpkgs"; inputs.home-manager.follows = "nixpkgs"; inputs.darwin.follows = "nixpkgs"; };
-    systems.url = "github:nix-systems/default";
+    systems.url = "github:nix-systems/default/future-26.11";
     config.url = "github:NiklasGollenstede/nix-wiplib?dir=example/defaultConfig"; # "path:./example/defaultConfig"; # (The latter only works with nix >= 2.26. The former effectively points to the last commit, i.e. it takes two commits to apply changes to the default config.)
 
 }; outputs = inputs: let patches = {
 
     nixpkgs = [
+        #(throw "Should not be evaluated when using wiplib as input")
         ./patches/nixpkgs/mkApply-25-11.patch
     ];
 

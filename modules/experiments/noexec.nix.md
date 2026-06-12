@@ -55,28 +55,21 @@ in {
         fix.firefox = lib.mkEnableOption "workaround for Firefox WideVine DRM not working with »noexec« homes" // { default = true; example = false; };
     }; };
 
-    config = lib.mkMerge [ ({
+    config = lib.mkIf cfg.enable (lib.mkMerge [ ({ # default all filesystems to noexec,nosuid,nodev unless explicitly specified otherwise:
 
-        ${prefix}.experiments.noexec = {
-            # Never enable this for the installer VM (which it breaks):
-            enable = lib.mkIf (config.system.build?isVmExec || config.system.build?isVmExec-aarch64-linux?isVmExec-x86_64-linux) (lib.mkVMOverride false);
-        };
-
-    }) (lib.mkIf cfg.enable ({ # default all filesystems to noexec,nosuid,nodev unless explicitly specified otherwise:
-
-        fileSystems = lib.mkApply (lib.mapAttrs (_: fs: fs // {
+        fileSystems = lib.wip.mkApply (lib.mapAttrs (_: fs: fs // {
             options = defaultToNo fs.options;
         }));
-        boot.specialFileSystems = lib.mkApply (lib.mapAttrs (_: fs: fs // {
+        boot.specialFileSystems = lib.wip.mkApply (lib.mapAttrs (_: fs: fs // {
             options = defaultToNo fs.options;
         }));
     } // (lib.optionalAttrs (options.virtualisation?fileSystems) {
-        virtualisation.fileSystems = lib.mkApply (lib.mapAttrs (device: fs: fs // {
+        virtualisation.fileSystems = lib.wip.mkApply (lib.mapAttrs (device: fs: fs // {
             options = defaultToNo ((lib.optional (cfg.execPaths?${device}) "exec") ++ fs.options);
         }));
 
 
-    }))) (lib.mkIf cfg.enable { # enforcement for mounts that are not created by fileSystems / boot.specialFileSystems:
+    })) ({ # enforcement for mounts that are not created by fileSystems / boot.specialFileSystems:
 
         systemd.services."user-runtime-dir@" = {
             overrideStrategy = "asDropin";
@@ -104,19 +97,20 @@ in {
         nix.settings.allowed-users = [ "root" "@wheel" ]; # This goes hand-in-hand with setting mounts as »noexec«. Cases where a user other than root should build stuff are probably fairly rare. A "real" user might want to, but that is either already in the wheel(/sudo) group, or explicitly adding that user is pretty reasonable.
 
 
-    }) (lib.mkIf cfg.enable ({ # exceptions
+    }) (({ # exceptions
 
-        fileSystems = lib.mapAttrs (where: _: fsCfg: { config = {
+        fileSystems = lib.mapAttrs (where: _: fsArgs: { config = {
             options = [ "exec" ]
             # This needs to be a mount point. If it is not otherwise defined as such, make it a bind mount onto itself:
-            ++ (lib.optional (fsCfg.config.device == where) "bind"); device = lib.mkDefault where;
+            ++ (lib.optional (fsArgs.config.device == where) "bind"); device = lib.mkDefault where;
+            fsType = lib.mkOptionDefault "none";
         }; }) (lib.filterAttrs (where: _: !lib.hasPrefix "/run/user/" where) (builtins.removeAttrs cfg.execPaths specialFileSystems));
 
         boot.specialFileSystems = lib.fun.mapMerge (where: if cfg.execPaths?${where} then {
             ${where}.options = [ "exec" ];
         } else { }) specialFileSystems;
 
-    })) (lib.mkIf cfg.enable { # exceptions
+    })) ({ # exceptions
 
         boot.specialFileSystems = {
             "/dev" = { options = [ "dev" ]; };
@@ -138,13 +132,13 @@ in {
         }; }) (lib.filterAttrs (where: _: lib.hasPrefix "/run/user/" where) cfg.execPaths);
 
 
-    }) ({ # (the overlay's presence should not depend on cfg(.enable))
+    }) (lib.mkIf cfg.fix.firefox {
 
         # (`programs.firefox.*` can set preferences, but not GMP paths (or environment variables), so override all firefox variants(' wrappers, so this is actually fast))
         nixpkgs.overlays = [ (final: prev: let
             arch = { "x86_64-linux" = "linux_x64"; "aarch64-linux" = "linux_arm64"; }."${prev.stdenv.hostPlatform.system or ""}" or null;
-        in if arch == null then { } else  {
-            wrapFirefox = if !cfg.enable || !cfg.fix.firefox then prev.wrapFirefox else browser: opts: let
+        in if arch == null then { } else {
+            wrapFirefox = browser: opts: let
                 version = "${final.widevine-cdm.version}-system";
                 extraPrefs = opts.extraPrefs or "" + ''
                     lockPref("media.gmp-widevinecdm.version", ${builtins.toJSON version});
@@ -167,6 +161,6 @@ in {
             });
         }) ];
 
-    }) ];
+    }) ]);
 
 }

@@ -1,8 +1,8 @@
 diff --git a/lib/default.nix b/lib/default.nix
-index e10332ca58dd..34b26547faf9 100644
+index 751738a98965..9a90990fc32a 100644
 --- a/lib/default.nix
 +++ b/lib/default.nix
-@@ -470,6 +470,7 @@ let
+@@ -501,6 +501,7 @@ let
          mkAfter
          mkAliasDefinitions
          mkAliasAndWrapDefinitions
@@ -11,10 +11,10 @@ index e10332ca58dd..34b26547faf9 100644
          mkRemovedOptionModule
          mkRenamedOptionModule
 diff --git a/lib/modules.nix b/lib/modules.nix
-index e545f9c9707d..accd71dcb6ad 100644
+index 21ffbb9591c5..4cdfae5862ef 100644
 --- a/lib/modules.nix
 +++ b/lib/modules.nix
-@@ -1153,7 +1153,21 @@ let
+@@ -1202,7 +1202,21 @@ let
        '';
  
    # Merge definitions of a value of a given type.
@@ -37,7 +37,7 @@ index e545f9c9707d..accd71dcb6ad 100644
      defsFinal' =
        let
          # Process mkMerge and mkIf properties.
-@@ -1177,7 +1191,7 @@ let
+@@ -1226,7 +1240,7 @@ let
          # Sort mkOrder properties.
          defsSorted =
            # Avoid sorting if we don't have to.
@@ -46,8 +46,8 @@ index e545f9c9707d..accd71dcb6ad 100644
              sortProperties defsFiltered.values
            else
              defsFiltered.values;
-@@ -1188,6 +1202,9 @@ let
-       };
+@@ -1260,6 +1274,9 @@ let
+         };
      defsFinal = defsFinal'.values;
  
 +  in rec {
@@ -56,7 +56,7 @@ index e545f9c9707d..accd71dcb6ad 100644
      # Type-check the remaining definitions, and merge them. Or throw if no definitions.
      mergedValue =
        if isDefined then
-@@ -1198,8 +1215,16 @@ let
+@@ -1270,8 +1287,16 @@ let
              throw "A definition for option `${showOption loc}' is not of type `${type.description}'. TypeError: ${checkedAndMerged.headError.message}"
            else
              checkedAndMerged.value
@@ -75,7 +75,7 @@ index e545f9c9707d..accd71dcb6ad 100644
          else
            let
              allInvalid = filter (def: !type.check def.value) defsFinal;
-@@ -1227,11 +1252,14 @@ let
+@@ -1301,11 +1326,14 @@ let
          (
            if type.merge ? v2 then
              let
@@ -91,7 +91,7 @@ index e545f9c9707d..accd71dcb6ad 100644
                  }
                );
              in
-@@ -1386,7 +1414,11 @@ let
+@@ -1480,7 +1508,11 @@ let
          else
            def;
        defs' = map strip defs;
@@ -104,7 +104,7 @@ index e545f9c9707d..accd71dcb6ad 100644
      in
      sort compare defs';
  
-@@ -1508,6 +1540,11 @@ let
+@@ -1602,6 +1634,11 @@ let
    defaultOrderPriority = 1000;
    mkAfter = mkOrder 1500;
  
@@ -116,7 +116,7 @@ index e545f9c9707d..accd71dcb6ad 100644
    # Convenient property used to transfer all definitions and their
    # properties from one option to another. This property is useful for
    # renaming options, and also for including properties from another module
-@@ -2206,6 +2243,7 @@ private
+@@ -2312,6 +2349,7 @@ private
      mkAliasIfDef
      mkAliasOptionModule
      mkAliasOptionModuleMD
@@ -125,10 +125,10 @@ index e545f9c9707d..accd71dcb6ad 100644
      mkBefore
      mkChangedOptionModule
 diff --git a/lib/tests/modules.sh b/lib/tests/modules.sh
-index 505c1c5a5fe4..9feafe7fe5e7 100755
+index 515ab169fe43..256b806be9f8 100755
 --- a/lib/tests/modules.sh
 +++ b/lib/tests/modules.sh
-@@ -157,6 +157,8 @@ checkConfigError() {
+@@ -168,6 +168,8 @@ checkConfigError() {
      fi
  }
  

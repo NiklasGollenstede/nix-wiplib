@@ -36,36 +36,32 @@ if [[ ${args[trace]:-} ]] ; then declare -p args argv ; set -x ; fi
 #if [[ ${argv[0]:-} == -* ]] ; then echo 'Hostname may not start with a dash' >&2 ; exit 1 ; fi
 if [[ ${argv[0]:-} == -* ]] ; then argv=( '' "${argv[@]}" ) ; fi
 if [[ ${argv[1]:-} == -* ]] ; then argv=( "${argv[0]:-}" '' "${argv[@]:1}" ) ; fi
-targetHost=${argv[0]:-$( hostname )}
+target=${argv[0]:-} ; loopback= ; if [[ ! $target ]] ; then target=$( hostname ) ; loopback=1 ; args[name]=${args[name]:-$target} ; fi
 verb=${argv[1]:-switch}
-if [[ ${args[debug]:-} ]] ; then
-    verb=eval ; args[name]=${args[name]:-$targetHost} ; argv+=( --debugger )
-fi
-
-#[[ targetHost =~ ^[a-z0-9-]+$ ]]
-if [[ ! ${argv[0]:-} && ! ${args[name]:-} ]] ; then args[name]=$targetHost ; fi # avoid SSHing to current host
-configName=${args[name]:-$( ssh "$targetHost" -T -- hostname )} || exit
+argv=("${argv[@]:2}")
+if [[ ${args[debug]:-} ]] ; then verb=eval ; args[name]=${args[name]:-$target} ; argv+=( --debugger ) ; fi
+args[name]=${args[name]:-$( ssh "$target" -T -- hostname )} || exit
 
 if [[ $verb == eval ]] ; then
-    nix eval --extra-experimental-features 'nix-command flakes' --raw .#.nixosConfigurations."$configName".config.system.build.toplevel.drvPath "${argv[@]:2}" ; exit
+    nix eval --extra-experimental-features 'nix-command flakes' --raw .#.nixosConfigurations."${args[name]}".config.system.build.toplevel.drvPath "${argv[@]}" ; exit
 elif [[ ! ${args[remote-eval]:-} ]] ; then
-    drvPath=$( nix eval --extra-experimental-features 'nix-command flakes' --raw .#.nixosConfigurations."$configName".config.system.build.toplevel.drvPath "${argv[@]:2}" ) || exit
-    if [[ ${argv[0]:-} ]] ; then
-        nix --extra-experimental-features nix-command copy --to ssh://"$targetHost" --derivation "$drvPath^*" || exit
+    drvPath=$( nix eval --extra-experimental-features 'nix-command flakes' --raw .#.nixosConfigurations."${args[name]}".config.system.build.toplevel.drvPath "${argv[@]}" ) || exit
+    if [[ ! $loopback ]] ; then
+        nix --extra-experimental-features nix-command copy --to ssh://"$target" --derivation "$drvPath^*" || exit
     fi # else: localhost -> no need to copy anything
 else
-    drvPath=path:$( @{pkgs.push-flake!getExe} "$targetHost" . )#.nixosConfigurations."$configName".config.system.build.toplevel || exit
+    drvPath=path:$( @{pkgs.push-flake!getExe} "$target" . )#.nixosConfigurations."${args[name]}".config.system.build.toplevel || exit
 fi
 
-ssh -t "$targetHost" -- "$( function remote { set -o pipefail -u
+ssh -t "$target" -- "$( function remote { set -o pipefail -u
     if [[ ${args[trace]:-} ]] ; then set -x ; fi
     function version-gr-eq { printf '%s\n%s' "$1" "$2" | LC_ALL=C sort -C -V -r ; }
     output= ; if version-gr-eq "$( nix --version | grep -Poe '\d+.*' )" '2.14' ; then output='^out' ; fi
     if [[ $verb == build ]] ; then
-        nix --extra-experimental-features nix-command build --keep-going "${drvPath/.drv/.drv$output}" "${argv[@]:2}" || return
+        nix --extra-experimental-features nix-command build --keep-going "${drvPath/.drv/.drv$output}" "${argv[@]}" || return
         return
     else
-        systemPath=$( nix --extra-experimental-features nix-command build --keep-going --no-link --print-out-paths "${drvPath/.drv/.drv$output}" "${argv[@]:2}" ) || return
+        systemPath=$( nix --extra-experimental-features nix-command build --keep-going --no-link --print-out-paths "${drvPath/.drv/.drv$output}" "${argv[@]}" ) || return
     fi
     prevSystem=$( readlink /run/current-system )
     sudo= ; if [[ ${UID:-0} != "$( stat -c %u /nix 2>/dev/null || echo 0 )" ]] ; then sudo=sudo ; fi

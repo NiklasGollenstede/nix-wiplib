@@ -9,7 +9,7 @@ in {
     config = lib.mkIf cfg.enable {
         system.stateVersion = lib.mkMerge [
             (lib.mkForce modulesVersion) # Set a value that passes the type checking, then replace it with something that throws on access:
-            (lib.mkForce (lib.mkApply (_: throw "`config.system.stateVersion` has been disabled. Do not depend on it!\nYou probably need to explicitly set the option that appears above `system.stateVersion` in the stack trace.")))
+            (lib.mkForce (lib.wip.mkApply (_: throw "`config.system.stateVersion` has been disabled. Do not depend on it!\nYou probably need to explicitly set the option that appears above `system.stateVersion` in the stack trace.")))
         ];
         assertions = lib.wip.removeAssertionsFrom "${modulesPath}/misc/version.nix";
 

@@ -6,7 +6,7 @@ in {
     # If the top-level flake does not explicitly use `agenix`, add its nixosModule and overlay from our own inputs.
     # If it uses `agenix` and passes it along, we do nothing.
     # If it uses `agenix` and without passing it along, adding the module/overlay here has no effect iff our input is the same (via `follows`).
-    imports = if moduleArgs?inputs.agenix then [ ] else [ inputs.agenix.nixosModules.default { nixpkgs.overlays = lib.mkBefore [ inputs.agenix.overlays.default ]; } ];
+    imports = if moduleArgs?inputs.agenix then [ ] else [ inputs.agenix.nixosModules.default (lib.mkIf cfg.enable { nixpkgs.overlays = lib.mkBefore [ inputs.agenix.overlays.default ]; }) ];
 
     options.${prefix} = { services.secrets = {
         enable = (lib.mkEnableOption "handling of secrets via agenix. This should usually not be enabled in containers") // { example = lib.literalExpression "!config.boot.isContainer"; };

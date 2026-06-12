@@ -77,7 +77,7 @@ in {
     }) ({
 
         ${prefix} = {
-            programs.blesh.enable = true;
+            programs.blesh.enable = lib.mkDefault true;
             programs.blesh.init = ''
                 # Intuitive multiline editing (this requires the terminal to send escape sequences for those key combinations):
                 ble-bind -f 'C-RET' 'accept-line' # Ctrl+Enter -> submit/execute

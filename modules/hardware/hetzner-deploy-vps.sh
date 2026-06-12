@@ -8,13 +8,13 @@ declare-flag deploy-system-to-hetzner-vps parallel-build-deploy '' "Start initia
 function deploy-system-to-hetzner-vps {
     if [[ ! ${args[quiet]:-} ]] ; then echo 'Building the worker image' ; fi
     local image ; image=$( mktemp -u ) && prepend_trap "rm -f '$image'" EXIT || return
-    local buildPid ; args[no-inspect]=1 ; args[disks]=$image install-system & buildPid=$!
+    local buildPid ; args[no-inspect]=1 ; args[disks]=$image ; install-system & buildPid=$!
     if [[ ! ${args[parallel-build-deploy]:-} ]] ; then wait $buildPid || return ; buildPid= ; fi
 
-    args_waitPid=$buildPid deploy-image-to-hetzner-vps "$image" "$@" || return
+    args_waitPid=$buildPid deploy-image-to-hetzner-vps "$@" || return
 }
 
-declare-command deploy-image-to-hetzner-vps imagePath '-- --name=<name> --type=<serverType> [...hcloud_server_create_args]' << 'EOD'
+declare-command deploy-image-to-hetzner-vps '-- --name=<name> --type=<serverType> [...hcloud_server_create_args]' << 'EOD'
 Creates a new Hetzner Cloud VPS, copies the system image from the local »imagePath« to the new VPS, boots it, and waits until its port 22 is open.
 For the arguments after »imagePath«, see the »deploy-system-to-hetzner-vps« command.
 Requires the »HCLOUD_TOKEN« environment variable to be set.
@@ -22,8 +22,8 @@ If the variable »arg_waitPid« is set, it waits for that process to exit in bet
 EOD
 declare-flag deploy-system/image-to-hetzner-vps vps-keep-on-build-failure '' "Do not delete the VPS if the deployment fails. Useful only for debugging (and dangerous otherwise, because the server resource is simply being \"leaked\")."
 declare-flag deploy-system/image-to-hetzner-vps vps-suppress-create-email '' "Prevent hetzner from sending an email with a (useless) root password for the new server to the account owner by setting the server's »ssh-key« option to »dummy«. A key of that name has to exist in »HCLOUD_TOKEN«'s cloud project."
-function deploy-image-to-hetzner-vps { # 1: imagePath
-    local imagePath=$1 ; shift 1 || exit
+function deploy-image-to-hetzner-vps {
+    local imagePath=${args[disks]} ; if [[ $imagePath == */* ]] ; then imagePath=${imagePath}/primary.img ; fi
     local stdout=/dev/stdout ; if [[ ${args[quiet]:-} ]] ; then stdout=/dev/null ; fi
 
     local name ; for ((i = 0; i < $#; i++)) ; do
@@ -60,7 +60,7 @@ EOC
 
     local ip ; ip=$( @{native.hcloud}/bin/hcloud server ip "$name" ) || ip=$( @{native.hcloud}/bin/hcloud server ip --ipv6 "$name" ) && echo "$ip" >$work/ip || return
     printf "%s %s\n" "$ip" "$( cat $work/host.pub )" >$work/known_hosts || return
-    local sshCmd ; sshCmd="@{native.openssh}/bin/ssh -oUserKnownHostsFile=$work/known_hosts -i $work/login root@$ip"
+    local sshCmd ; sshCmd="@{native.openssh}/bin/ssh -F /dev/null -o IdentityAgent=none -o UserKnownHostsFile=$work/known_hosts -i $work/login root@$ip"
 
     printf %s 'Preparing the VPS/worker for image transfer ' >$stdout
     sleep 5 ; local i ; for i in $(seq 20) ; do sleep 1 ; if $sshCmd -- true &>/dev/null ; then break ; fi ; printf . >$stdout ; done ; printf ' ' >$stdout
@@ -77,8 +77,9 @@ EOC
     ' || return ; echo . >$stdout
 
     if [[ ${arg_waitPid:-} ]] ; then wait $buildPid || return ; fi
-    echo 'Writing worker image to VPS' >$stdout
-    @{native.zstd}/bin/zstd -c "$imagePath" | $sshCmd 'set -o pipefail -u -e
+    echo 'Writing worker image to VPS (progress will not be linear)' >$stdout
+    <"$imagePath" @{native.pv}/bin/pv | # Skips holes when reading (depending on the filesystem) and especially when sending. The server will still write everything.
+    @{native.zstd}/bin/zstd -c - | $sshCmd 'set -o pipefail -u -e
         </dev/null fuser -mk /old-root &>/dev/null ; sleep 2
         </dev/null umount /old-root
         </dev/null blkdiscard -f /dev/sda &>/dev/null

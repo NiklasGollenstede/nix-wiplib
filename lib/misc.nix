@@ -3,6 +3,9 @@ dirname: inputs: let
     prefix = inputs.config.prefix;
 in rec {
 
+    # See `../patches/nixpkgs/mkApply-*.patch`. Repeated here to not rely on the patch for `lib`.
+    mkApply = mapper: { _type = "apply"; inherit mapper; };
+
     # Given a flake input (attribute passed to ta flakes `outputs` function), this returns a flake reference (thing that can be passed to lockfiles' `locked` or registries' `to` attributes) to the flake.
     # Specifically, this fixes the reference to flakes that are not in the root of their repository (and thus have the `flake.nix` file in a subdirectory in the nix store).
     toFlakeRef = input: (lib.filterAttrs (n: _: n == "lastModified" || n == "narHash" || n == "rev" || n == "revCount") input) // (let
@@ -25,7 +28,7 @@ in rec {
 
     ## When set as `config.assertions` of a NixOS module, this removes all assertions that were defined in the given `file`, avoiding both the result and evaluation of the assertions.
     #  Example: `config.assertions = lib.wip.removeAssertionsFrom "${modulesPath}/foo/bar.nix";`
-    removeAssertionsFrom = file: lib.mkApply (builtins.filter (attrs: let pos = builtins.unsafeGetAttrPos "assertion" attrs; in pos == null || pos.file != file));
+    removeAssertionsFrom = file: mkApply (builtins.filter (attrs: let pos = builtins.unsafeGetAttrPos "assertion" attrs; in pos == null || pos.file != file));
 
     # (Shallowly) tries to evaluate and return `danger`, and returns `fallback` if the former fails.
     try = danger: fallback: let attempt = builtins.tryEval danger; in if attempt.success then attempt.value else fallback;
