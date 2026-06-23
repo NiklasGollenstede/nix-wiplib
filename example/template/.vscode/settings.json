@@ -6,5 +6,20 @@
 	},
 	"cSpell.diagnosticLevel": "Information", // to find spelling mistakes
 	"cSpell.words": [
+		"dontUnpack",
+		"fetchurl",
+		"getty",
+		"github",
+		"Gollenstede",
+		"linux",
+		"nixos",
+		"nixpkgs",
+		"openssh",
+		"pkgs",
+		"pname",
+		"stdenv",
+		"temproot",
+		"tmpfiles",
+		"wiplib"
 	],
 }
