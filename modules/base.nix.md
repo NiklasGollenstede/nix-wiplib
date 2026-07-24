@@ -68,8 +68,8 @@ in {
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
         boot.initrd.systemd.emergencyAccess = lib.mkIf (config.systemd.enableEmergencyMode && config.services.getty.autologinUser == "root") (lib.mkDefault true);
         systemd.services = lib.mkIf (config.systemd.enableEmergencyMode && config.services.getty.autologinUser == "root") {
-            emergency.environment = lib.mkDefault { SYSTEMD_SULOGIN_FORCE = "1"; };
-            rescue.environment = lib.mkDefault { SYSTEMD_SULOGIN_FORCE = "1"; };
+            emergency.environment = { SYSTEMD_SULOGIN_FORCE = lib.mkDefault "1"; };
+            rescue.environment = { SYSTEMD_SULOGIN_FORCE = lib.mkDefault "1"; };
         };
     }) ({
         # Show unit names instead of descriptions in systemctl status output and during boot.

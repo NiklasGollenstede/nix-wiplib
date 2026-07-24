@@ -7,7 +7,19 @@ Usually, if the database dir matching `services.postgresql.package`'s version do
 With this module, when setting `services.postgresql.prevPackage` to the `.package` used before the upgrade (only bumps by one major version at a time are supported), it will instead use `pg_upgrade` to migrate the previous database to the new version.
 If the upgrade fails, the `postgresql` service won't be started (instead of running on an empty database).
 
-This worked fine to upgrade from 11.1 through to 16.
+This worked fine to upgrade from 11.1 through to 18.
+
+## Notes
+
+```bash
+# Bump the declared collation (sorting) version in all databases (after upgrades of glibc), to suppress warnings:
+su - postgres
+curBin=$( systemctl cat postgresql | grep -oP '^\s*ExecStart=\K.*' | cut -d' ' -f1 | xargs dirname )
+"$curBin"/psql -d template1 -A -t -q -c 'SELECT datname FROM pg_database' | while IFS= read -r db; do
+    "$curBin"/psql -d template1 -A -t -q -c 'ALTER DATABASE "'"$db"'" REFRESH COLLATION VERSION' || true
+done
+```
+
 
 ## Implementation
 
@@ -49,15 +61,16 @@ in {
 
             if [[ ! -e $curData/PG_VERSION ]] ; then ( # (systemd may have created $curData itself)
                 rm -rf "$curData"/.auto-upgrade &>/dev/null || true
-                # All of this is no atomic, and we would not want to proceed (on a second attempt) with a half-migrated DB.
-                # Working in a temp dir that can replace $curData on success would be better, but $curData may be a mount point, so we have to use a subdir instead:
+                # The upgrade is not atomic, and we would not want to proceed (on a second attempt) with a half-migrated DB, so use a different dir first:
                 mkdir -p -m 750 "$curData"/.auto-upgrade && cd "$curData"/.auto-upgrade || exit
-                $curBin/initdb -D "$curData"/.auto-upgrade || exit
+                checksum_flag=--no-data-checksums ; if $prevBin/pg_controldata "$prevData" | grep -q 'Data page checksum version:\s*[1-9]'; then checksum_flag=--data-checksums ; fi # keep checksum state (else upgrade will fail)
+                $curBin/initdb -D "$curData"/.auto-upgrade "$checksum_flag" || exit
                 $curBin/pg_upgrade \
                     --old-datadir "$prevData" --new-datadir "$curData"/.auto-upgrade \
                     --old-bindir $prevBin --new-bindir $curBin \
                     ${lib.escapeShellArgs cfg.upgradeArgs} \
                 || exit
+                # Working in a temp dir that can replace $curData on success would be better, but $curData may be a mount point, so we have to use a subdir instead (there should not be anything in $curData yet, other than possibly a previously failed copy attempt):
                 ( GLOBIGNORE="$curData"/.auto-upgrade/PG_VERSION ; mv -ft "$curData"/ "$curData"/.auto-upgrade/* ) || exit
                 mv -ft "$curData"/ "$curData"/.auto-upgrade/PG_VERSION || exit # commit
                 rmdir "$curData"/.auto-upgrade || true # should be empty

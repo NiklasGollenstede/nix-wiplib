@@ -91,13 +91,15 @@ in {
         fileSystems."/nix/store".postMountCommands = ''
             chmod -f 1771 $root/nix/store || true # root owned (usually 1775; should still be writable by the build group, and needs to be traversable by everyone)
             chmod -f  750 $root/nix/store/.links || true # root owned (was 755), but no one but the nix daemon should directly access these (and finding an executable file by content hash could be a risk)
+            if [[ ! ''${IN_NIXOS_INSTALLER:-} ]]; then
+                mount -o remount,ro $root/nix/store || true # make this read-only already, so that stage-2-init does not reset the permissions again
+            fi
         '';
-        fileSystems."/nix/store".options = [ "ro" ]; # without setting this a bit earlier, stage-2-init resets the permissions again
 
         nix.settings.allowed-users = [ "root" "@wheel" ]; # This goes hand-in-hand with setting mounts as »noexec«. Cases where a user other than root should build stuff are probably fairly rare. A "real" user might want to, but that is either already in the wheel(/sudo) group, or explicitly adding that user is pretty reasonable.
 
 
-    }) (({ # exceptions
+    }) (({ # implement cfg.execPaths:
 
         fileSystems = lib.mapAttrs (where: _: fsArgs: { config = {
             options = [ "exec" ]
@@ -110,7 +112,16 @@ in {
             ${where}.options = [ "exec" ];
         } else { }) specialFileSystems;
 
-    })) ({ # exceptions
+        # /run/user/<uid>:
+        systemd.services = lib.fun.mapMerge (where: let
+            uid = lib.hasPrefix "/run/user/" where;
+        in { "user-runtime-dir@${uid}" = {
+            overrideStrategy = "asDropin";
+            serviceConfig.ExecStartPost = [ "/run/current-system/sw/bin/mount -o remount,exec /run/user/uid" ];
+        }; }) (lib.filterAttrs (where: _: lib.hasPrefix "/run/user/" where) cfg.execPaths);
+
+
+    })) ({ # general & NixOS exceptions
 
         boot.specialFileSystems = {
             "/dev" = { options = [ "dev" ]; };
@@ -122,14 +133,6 @@ in {
             ${if config.nix.enable then config.nix.settings.build-dir or "/nix/var/nix/builds" else null} = true;
         };
         # Adding /run or paths in /home/* to execPaths is easy enough.
-
-        # Optionally re-enable exec on /run/user/<uid>:
-        systemd.services = lib.fun.mapMerge (where: let
-            uid = lib.hasPrefix "/run/user/" where;
-        in { "user-runtime-dir@${uid}" = {
-            overrideStrategy = "asDropin";
-            serviceConfig.ExecStartPost = [ "/run/current-system/sw/bin/mount -o remount,exec /run/user/uid" ];
-        }; }) (lib.filterAttrs (where: _: lib.hasPrefix "/run/user/" where) cfg.execPaths);
 
 
     }) (lib.mkIf cfg.fix.firefox {
