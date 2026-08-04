@@ -19,6 +19,7 @@
     nixpkgs = [
         #(throw "Should not be evaluated when using wiplib as input")
         ./patches/nixpkgs/mkApply-25-11.patch
+        inputs.installer.patches.nixpkgs.pkgs-overridable
     ];
 
 }; in inputs.functions.lib.patchFlakeInputsAndImportRepo inputs patches ./. (inputs: repo: let

@@ -1,0 +1,27 @@
+diff --git a/src/libstore/local-store.cc b/src/libstore/local-store.cc
+index 2556ca4850..86919bee29 100644
+--- a/src/libstore/local-store.cc
++++ b/src/libstore/local-store.cc
+@@ -160,7 +160,7 @@ LocalStore::LocalStore(ref<const Config> config)
+     /* Optionally, create directories and set permissions for a
+        multi-user install. */
+     if (isRootUser() && localSettings.buildUsersGroup != "") {
+-        mode_t perm = 01775;
++        mode_t perm = 01775, world_readable = 04;
+ 
+         struct group * gr = getgrnam(localSettings.buildUsersGroup.get().c_str());
+         if (!gr)
+@@ -170,11 +170,11 @@ LocalStore::LocalStore(ref<const Config> config)
+         else if (!config->readOnly) {
+             auto st = stat(config->realStoreDir.get());
+ 
+-            if (st.st_uid != 0 || st.st_gid != gr->gr_gid || (st.st_mode & ~S_IFMT) != perm) {
++            if (st.st_uid != 0 || st.st_gid != gr->gr_gid)
+                 if (chown(config->realStoreDir.get().c_str(), 0, gr->gr_gid) == -1)
+                     throw SysError("changing ownership of path %s", PathFmt(config->realStoreDir.get()));
++            if ((st.st_mode & ~S_IFMT & ~world_readable) != (perm & ~world_readable))
+                 chmod(config->realStoreDir.get(), perm);
+-            }
+         }
+     }
+ #endif

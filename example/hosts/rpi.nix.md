@@ -24,6 +24,7 @@ in { preface = {
 
     nixpkgs.hostPlatform = "aarch64-linux"; system.stateVersion = "23.11";
     wip.hardware.raspberry-pi.enable = true;
+    boot.kernelPackages = pkgs.linuxPackages_latest; # Vendor kernel is no longer cached.
 
     setup.disks.devices.primary.size = 31914983424; # exact size of the disk/card
 
@@ -40,13 +41,21 @@ in { preface = {
 
     # Some base config:
     wip.base.enable = true;
-    documentation.enable = false; # sometimes takes quite long to build
     boot.kernelParams = [ "console=ttyS0" ]; # Only during local testing.
     wip.services.secrets = {
         enable = true; secretsDir = "example/secrets";
         include = [ "shadow/.*" ]; # secrets that this host needs access to
         rootKeyEncrypted = "ssh/host/host@${name}"; # (backup of) the host's decryption key, for (re-)installations
     };
+
+    # Minimalism:
+    documentation.enable = false;
+    profiles.minimal.enable = true;
+    services.dbus.packages = lib.mkForce [ ];
+    nix.enable = false; # won't work
+    programs.git.enable = false;
+    security.sudo.enable = false;
+    wip.base.includeInputs = lib.mkForce { };
 
 
 }) ({ ## Actual Config
@@ -60,6 +69,10 @@ in { preface = {
     wip.services.dropbear.socketActivation = true;
 
     boot.binfmt.emulatedSystems = [ "x86_64-linux" ];
+
+    wip.experiments.noexec.enable = true;
+    #wip.experiments.noexec.fix.nix = true;
+    #wip.experiments.noexec.fix.qemu = true;
 
 
 }) ]; }

@@ -48,7 +48,8 @@ in {
         # default to using the root decryption key as SSH host key (or vice versa):
         age.identityPaths = lib.mkDefault [ (config.environment.etc."ssh/ssh_host_ed25519_key".source or "/etc/ssh/ssh_host_ed25519_key") ];
         # and then don't generate any other SSH host keys:
-        services.openssh.hostKeys = lib.mkDefault [ { path = "/etc/ssh/ssh_host_ed25519_key"; type = "ed25519"; } ];
+        services.openssh.hostKeys = lib.mkDefault [ { path = "/etc/ssh/ssh_host_ed25519_key"; type = "ed25519"; } ]; # (given this, modules/setup/temproot.nix.md sets a symlink in config.environment.etc)
+        services.openssh.generateHostKeys = lib.mkDefault false;
 
         installer.scripts.init-secrets = { path = "${inputs.self}/lib/installer-secrets.sh"; };
         installer.commands.prepareInstaller = ''prepare-installer--secrets'';

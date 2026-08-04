@@ -1,0 +1,16 @@
+diff --git a/hw/9pfs/9p-local.c b/hw/9pfs/9p-local.c
+
+# This is (probably very) incomplete. It runs straight into the next permission error.
+
+index ee592b62f8..0f5d72f699 100644
+--- a/hw/9pfs/9p-local.c
++++ b/hw/9pfs/9p-local.c
+@@ -1471,7 +1471,7 @@ static int local_init(FsContext *ctx, Error **errp)
+ {
+     LocalData *data = g_malloc(sizeof(*data));
+
+-    data->mountfd = open(ctx->fs_root, O_DIRECTORY | O_RDONLY);
++    data->mountfd = open(ctx->fs_root, O_DIRECTORY | O_PATH);
+     if (data->mountfd == -1) {
+         error_setg_file_open(errp, errno, ctx->fs_root);
+         goto err;

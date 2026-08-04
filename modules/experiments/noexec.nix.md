@@ -52,6 +52,8 @@ in {
             apply = lib.filterAttrs (path: exec: exec);
             default = { }; defaultText = lib.literalExpression ''{ "/nix/store" = true; ''${if config.nix.enable then config.nix.settings.build-dir or "/nix/var/nix/builds" else null} = true; }'';
         };
+        fix.nix = lib.mkEnableOption "patching »nix.package« to let nix tolerate a non-enumerable /nix/store";
+        fix.qemu = lib.mkEnableOption "patching qemu to let its 9p shares tolerate a non-enumerable /nix/store";
         fix.firefox = lib.mkEnableOption "workaround for Firefox WideVine DRM not working with »noexec« homes" // { default = true; example = false; };
     }; };
 
@@ -88,7 +90,8 @@ in {
         boot.nixStoreMountOpts = lib.mkOptionDefault [ "exec" ]; # This does not always get applied early enough, so we still need `execPaths."/nix/store" = true`.
 
         # Make the /nix/store non-iterable, to make it harder for unprivileged programs to search the store for programs they should not have access to:
-        fileSystems."/nix/store".postMountCommands = ''
+        # Unless patched, the Nix daemon will reset the permissions on /nix/store to 1775 or die trying.
+        fileSystems."/nix/store".postMountCommands = lib.mkIf cfg.fix.nix ''
             chmod -f 1771 $root/nix/store || true # root owned (usually 1775; should still be writable by the build group, and needs to be traversable by everyone)
             chmod -f  750 $root/nix/store/.links || true # root owned (was 755), but no one but the nix daemon should directly access these (and finding an executable file by content hash could be a risk)
             if [[ ! ''${IN_NIXOS_INSTALLER:-} ]]; then
@@ -133,6 +136,20 @@ in {
             ${if config.nix.enable then config.nix.settings.build-dir or "/nix/var/nix/builds" else null} = true;
         };
         # Adding /run or paths in /home/* to execPaths is easy enough.
+
+
+    }) (lib.mkIf cfg.fix.nix {
+
+        nix.package = lib.wip.mkApply (old: old.appendPatches [ (if lib.versionAtLeast old.version "2.35" then inputs.self.patches.nix.allow-hidden-paths.v2_35 else inputs.self.patches.nix.allow-hidden-paths.v2_34) ]);
+
+
+    }) (lib.mkIf cfg.fix.qemu {
+
+        nixpkgs.overlays = [ (final: prev: {
+            qemu = prev.qemu.overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [ inputs.self.patches.qemu.allow-hidden-9p.v11 ];
+            });
+        }) ];
 
 
     }) (lib.mkIf cfg.fix.firefox {

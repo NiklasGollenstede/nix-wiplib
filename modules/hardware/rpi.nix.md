@@ -44,7 +44,7 @@ in {
 
         boot.loader.generic-extlinux-compatible.enable = true;
         boot.loader.extra-files.enable = true;
-        boot.loader.extra-files.presets.raspberryPi = { bcm2710 = true; bcm2711 = true; };
+        boot.loader.extra-files.presets.raspberryPi = { bcm2710 = true; bcm2711 = true; bcm2712 = true; };
 
 
     }) ({ ## Drivers
@@ -76,11 +76,11 @@ in {
         #hardware.raspberry-pi."4".dwc2.dr_mode = lib.mkDefault "otg"; # or "peripheral" or "host" ("otg" seems to work just fine also as host)
 
         hardware.deviceTree.enable = true;
-        hardware.deviceTree.filter = lib.mkForce "bcm271[01]-rpi-*.dtb"; # rPI(cm)2/3/4(B(+))/Zero2(W) models
+        hardware.deviceTree.filter = lib.mkForce "bcm271[012]-rpi-*.dtb"; # rPI(cm)2/3/4(B(+))/5/Zero2(W) models
 
         environment.systemPackages = with pkgs; [
             libraspberrypi # »vcgencmd measure_temp« etc.
-            raspberrypi-eeprom # rpi-eeprom-update
+            #raspberrypi-eeprom # rpi-eeprom-update (actually has a quite large closure)
         ];
 
         boot.initrd.systemd.tpm2.enable = false;
@@ -89,7 +89,7 @@ in {
 
         hardware.i2c.enable = true; # includes »boot.kernelModules = [ "i2c-dev" ]« and some »services.udev.extraRules«
         environment.systemPackages = [ pkgs.i2c-tools ]; # e.g. »i2cdetect«
-        boot.loader.raspberryPi.firmwareConfig = "dtparam=i2c_arm=on\n"; # with the default dtb, this enables the ARM i²c /dev/i2c-1 on pins 3+5 / GPIO2+3 (/ SDA+SCL) of all tested rPI models (this has mostly the same effect as setting »hardware.raspberry-pi."4".i2c1.enable«)
+        boot.loader.extra-files.files."config.txt".data.all.dtparam = [ "i2c_arm=on\n" ]; # with the default dtb, this enables the ARM i²c /dev/i2c-1 on pins 3+5 / GPIO2+3 (/ SDA+SCL) of all tested rPI models (this has mostly the same effect as setting »hardware.raspberry-pi."4".i2c1.enable«)
         # "dtparam=i2c_vc=on" enables the VideoCore i²c on pins 27+28 / GPIO0+1, but https://raspberrypi.stackexchange.com/questions/116726/enabling-of-i2c-0-via-dtparam-i2c-vc-on-on-pi-3b-causes-i2c-10-i2c-11-t
         # (there is also »hardware.raspberry-pi."4".i2c{0,1}.enable« as an alternative way to enable i2c_arm and i2c_vc, but that option seems bcm2711(/rPI4) specific)
 
@@ -119,11 +119,7 @@ in {
 
     }) (lib.mkIf cfg.lightless {
 
-        boot.loader.raspberryPi.firmwareConfig = ''
-            # turn off ethernet LEDs
-            dtparam=eth_led0=4
-            dtparam=eth_led1=4
-        '';
+        boot.loader.extra-files.files."config.txt".data.all.dtparam = [ "eth_led0=4" "eth_led1=4" ];
         systemd.tmpfiles.rules = [
             "w  /sys/class/leds/led0/brightness  -  -  -  -  0" # yellow (activity) LED
             "w  /sys/class/leds/led1/brightness  -  -  -  -  0" # red (power) LED
