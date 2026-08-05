@@ -29,20 +29,14 @@
     },
     "config": {
       "locked": {
-        "dir": "example/defaultConfig",
-        "lastModified": 1784902685,
-        "narHash": "sha256-E1F6oRfxf76GdqAvuKJ/48HGuoNc+m1rxRuYt9RQyOQ=",
-        "owner": "NiklasGollenstede",
-        "repo": "nix-wiplib",
-        "rev": "f459cd445b64dc9cb64fded378c4678a4e11b042",
-        "type": "github"
+        "path": "./example/defaultConfig",
+        "type": "path"
       },
       "original": {
-        "dir": "example/defaultConfig",
-        "owner": "NiklasGollenstede",
-        "repo": "nix-wiplib",
-        "type": "github"
-      }
+        "path": "./example/defaultConfig",
+        "type": "path"
+      },
+      "parent": []
     },
     "config_2": {
       "locked": {
