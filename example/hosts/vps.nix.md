@@ -7,6 +7,7 @@
 To test the system locally, run in `..`:
 ```bash
  nix run .'#'vps -- run-qemu --reinstall
+ nix run .'#'vps -- run-qemu --direct='init=*'
 ```
 See `nix run .#vps -- --help` for options and more commands.
 
@@ -22,7 +23,7 @@ in { preface = {
 
 }; imports = [ ({ ## Hardware
 
-    nixpkgs.hostPlatform = if name == "vps" then "x86_64-linux" else "aarch64-linux"; system.stateVersion = "23.11";
+    nixpkgs.hostPlatform = if name == "vps" then "x86_64-linux" else "aarch64-linux";
     wip.hardware.hetzner-vps.enable = true;
 
     setup.temproot.enable = true;
@@ -30,13 +31,19 @@ in { preface = {
     setup.temproot.local.type = "zfs";
     setup.temproot.remote.type = "zfs";
 
+
+}) ({ ## Experiments
+
     wip.experiments.indirect-service-env.enable = true;
+
+    wip.experiments.no-state-version.enable = true;
 
     wip.experiments.noexec.enable = true;
     wip.experiments.noexec.execPaths = { # test whether modifying/adding mount points works:
         "/tmp" = true; # modifying an existing mount
         "/var/bin" = true; # adding a new mount point
     };
+    wip.experiments.noexec.fix.nix = true;
 
 
 }) ({ ## Base Config

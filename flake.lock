@@ -62,11 +62,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1785869624,
-        "narHash": "sha256-cyBhb8oWNAmc87CTsD+3cwXwcILJqShVK3tSVPHS4Mg=",
+        "lastModified": 1786697137,
+        "narHash": "sha256-UsrxeMtxqSOEutsSmk+lQpXOk8Tw4BcRHfhbWIgv6N4=",
         "owner": "NiklasGollenstede",
         "repo": "nix-functions",
-        "rev": "bd443b44bbea21029a0fb41dc8bd7bc2595cfee6",
+        "rev": "e033729055eb454245b3c5e3c232fc87b70e6443",
         "type": "github"
       },
       "original": {

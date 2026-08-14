@@ -11,33 +11,54 @@ index 751738a98965..9a90990fc32a 100644
          mkRemovedOptionModule
          mkRenamedOptionModule
 diff --git a/lib/modules.nix b/lib/modules.nix
-index 21ffbb9591c5..4cdfae5862ef 100644
+index a206ed6ed8e2..d8eeed1e679e 100644
 --- a/lib/modules.nix
 +++ b/lib/modules.nix
-@@ -1202,7 +1202,21 @@ let
+@@ -1184,9 +1184,35 @@ let
        '';
  
    # Merge definitions of a value of a given type.
 -  mergeDefinitions = loc: type: defs: rec {
+-    defsFinal' =
 +  mergeDefinitions = loc: type: defs: let
 +
 +    isMkApply = def: def.value._type or "" == "apply";
 +    hasMkApply = any isMkApply defsFinal;
 +
 +    defsApplied = merge: if hasMkApply then
-+      foldl' (defs: def: (
+       let
++        fallbackDefs =
++          if length defsFinal == 1 then # prepend the definitions of the next-lower priority:
++            let
++              filtered = (processDefs defsFinal'.highestPrio).defsSorted;
++            in
++              if filtered == [ ] then
++                throw "Option `${showOption loc}' has one definition, but it is a `mkApply' that thus has nothing to be applied to."
++              else
++                filtered ++ defsFinal
++          else
++            defsFinal;
++      in foldl' (prevDefs: def: (
 +        # on each "apply", merge the previous defs and continue with the applied value
-+        if !(isMkApply def) then defs ++ [ def ] # (the `defs ++ [ def ]` is quadratic in `length defs`)
-+        else if defs == [ ] then [ ] # ignore mapper if is the only "value" set (TODO: what's the error message in that case?) or all values are explicitly ordered after it (see sortProperties)
-+        else [ (def // { value = def.value.mapper (merge loc defs); }) ]
-+      )) [ ] defsFinal
++        if !(isMkApply def) then prevDefs ++ [ def ] # (the `defs ++ [ def ]` is quadratic in `length defs`)
++        else if prevDefs == [ ] then [ ] # ignore mapper if all values are explicitly ordered after it (see sortProperties)
++        else [ (def // { value = def.value.mapper (merge loc prevDefs); }) ]
++      )) [ ] fallbackDefs
 +    else
 +      defsFinal;
 +
-     defsFinal' =
-       let
++    processDefs = excludePrio:
++      rec {
          # Process mkMerge and mkIf properties.
-@@ -1226,7 +1240,7 @@ let
+         defsNormalized = concatMap (
+           m:
+@@ -1203,16 +1229,17 @@ let
+         ) defs;
+ 
+         # Process mkOverride properties.
+-        defsFiltered = filterOverrides' defsNormalized;
++        defsFiltered = filterOverrides'' excludePrio defsNormalized;
+ 
          # Sort mkOrder properties.
          defsSorted =
            # Avoid sorting if we don't have to.
@@ -46,7 +67,20 @@ index 21ffbb9591c5..4cdfae5862ef 100644
              sortProperties defsFiltered.values
            else
              defsFiltered.values;
-@@ -1260,6 +1274,9 @@ let
+-      in
++      };
++    defsFinal' =
+       # Fast path: the overwhelming majority of options have exactly one
+       # definition whose value carries no property wrapper
+       # (mkIf/mkMerge/mkOverride/mkOrder/definition). In that case the
+@@ -1236,12 +1263,16 @@ let
+           highestPrio = defaultOverridePriority;
+         }
+       else
++        let inherit (processDefs null) defsSorted defsFiltered; in
+         {
+           values = defsSorted;
+           inherit (defsFiltered) highestPrio;
          };
      defsFinal = defsFinal'.values;
  
@@ -56,7 +90,7 @@ index 21ffbb9591c5..4cdfae5862ef 100644
      # Type-check the remaining definitions, and merge them. Or throw if no definitions.
      mergedValue =
        if isDefined then
-@@ -1270,8 +1287,16 @@ let
+@@ -1252,8 +1283,16 @@ let
              throw "A definition for option `${showOption loc}' is not of type `${type.description}'. TypeError: ${checkedAndMerged.headError.message}"
            else
              checkedAndMerged.value
@@ -75,7 +109,7 @@ index 21ffbb9591c5..4cdfae5862ef 100644
          else
            let
              allInvalid = filter (def: !type.check def.value) defsFinal;
-@@ -1301,11 +1326,14 @@ let
+@@ -1283,11 +1322,14 @@ let
          (
            if type.merge ? v2 then
              let
@@ -91,7 +125,34 @@ index 21ffbb9591c5..4cdfae5862ef 100644
                  }
                );
              in
-@@ -1480,7 +1508,11 @@ let
+@@ -1414,7 +1456,8 @@ let
+   */
+   filterOverrides = defs: (filterOverrides' defs).values;
+ 
+-  filterOverrides' =
++  filterOverrides' = filterOverrides'' null;
++  filterOverrides'' = excludePrio:
+     let
+       getPrio =
+         def: if def.value._type or "" == "override" then def.value.priority else defaultOverridePriority;
+@@ -1423,14 +1466,14 @@ let
+     in
+     defs:
+     # Optimize for the singleton case, equivalent to the `else` clause.
+-    if length defs == 1 then
++    if excludePrio == null && length defs == 1 then
+       {
+         values = map strip defs;
+         highestPrio = getPrio (head defs);
+       }
+     else
+       let
+-        highestPrio = foldl' (prio: def: min (getPrio def) prio) 9999 defs;
++        highestPrio = foldl' (prio: def: min (getPrio def) prio) 9999 (if excludePrio == null then defs else filter (def: getPrio def != excludePrio) defs);
+       in
+       {
+         values = concatMap (def: if getPrio def == highestPrio then [ (strip def) ] else [ ]) defs;
+@@ -1462,7 +1505,11 @@ let
          else
            def;
        defs' = map strip defs;
@@ -104,7 +165,7 @@ index 21ffbb9591c5..4cdfae5862ef 100644
      in
      sort compare defs';
  
-@@ -1602,6 +1634,11 @@ let
+@@ -1606,6 +1653,11 @@ let
    defaultOrderPriority = 1000;
    mkAfter = mkOrder 1500;
  
@@ -116,7 +177,7 @@ index 21ffbb9591c5..4cdfae5862ef 100644
    # Convenient property used to transfer all definitions and their
    # properties from one option to another. This property is useful for
    # renaming options, and also for including properties from another module
-@@ -2312,6 +2349,7 @@ private
+@@ -2317,6 +2369,7 @@ private
      mkAliasIfDef
      mkAliasOptionModule
      mkAliasOptionModuleMD
@@ -125,7 +186,7 @@ index 21ffbb9591c5..4cdfae5862ef 100644
      mkBefore
      mkChangedOptionModule
 diff --git a/lib/tests/modules.sh b/lib/tests/modules.sh
-index 515ab169fe43..256b806be9f8 100755
+index 94aeea299e04..4a2ca2c171cb 100755
 --- a/lib/tests/modules.sh
 +++ b/lib/tests/modules.sh
 @@ -168,6 +168,8 @@ checkConfigError() {
@@ -139,10 +200,10 @@ index 515ab169fe43..256b806be9f8 100755
  
 diff --git a/lib/tests/modules/mkApply.nix b/lib/tests/modules/mkApply.nix
 new file mode 100644
-index 000000000000..0dc7271b544c
+index 000000000000..89ab617e8344
 --- /dev/null
 +++ b/lib/tests/modules/mkApply.nix
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,156 @@
 +#!/usr/bin/env -S bash -c 'bash <( tail -n+3 "$0" ) "$0" "$@"'
 +/* begin script:
 +
@@ -201,13 +262,45 @@ index 000000000000..0dc7271b544c
 +      ];
 +    };
 +    change-default = {
-+      type = lib.types.bool;
-+      expected = true;
++      type = lib.types.str;
++      expected = "good";
 +      definitions = [ # Change a default without affecting its priority:
-+        (lib.mkOptionDefault false)
-+        (lib.mkOptionDefault (lib.mkApply (value: true)))
-+        #(lib.mkOptionDefault true) # "The option `bool' has conflicting definition values"
-+        #(lib.mkDefault true) # changes priority
++        (lib.mkOptionDefault "bad")
++        (lib.mkOptionDefault (lib.mkApply (value: "good")))
++        #(lib.mkOptionDefault "good") # Would not work: "The option `...' has conflicting definition values"
++        #(lib.mkDefault "good") # Would not work: changes priority
++      ];
++    };
++    change-default-override = {
++      type = lib.types.str;
++      expected = "custom";
++      definitions = [ # A changed default can be overridden:
++        (lib.mkOptionDefault "bad")
++        (lib.mkOptionDefault (lib.mkApply (value: "good")))
++        (lib.mkDefault "custom") # no conflict
++      ];
++    };
++    fallback-default = {
++      type = lib.types.listOf lib.types.str;
++      apply = builtins.sort builtins.lessThan;
++      expected = [ "good!" "more!" "yes!" ];
++      definitions = [ # When no value is set on the level that mkApply is used on, use the next lower priority level as input:
++        (lib.mkOptionDefault ["no"])
++        (lib.mkApply (appendToAll "!"))
++        (lib.mkIf true (lib.mkDefault ["yes"]))
++        (lib.mkMerge [ (lib.mkDefault ["more"]) (lib.mkDefault ["good"]) ])
++        (lib.mkIf false (lib.mkDefault ["never"]))
++      ];
++    };
++    fallback-default-override = {
++      type = lib.types.listOf lib.types.str;
++      apply = builtins.sort builtins.lessThan;
++      expected = [ "more!" "yes!" ];
++      definitions = [ # When no value is set on the level that mkApply is used on, use the next lower priority level as input:
++        (lib.mkOptionDefault ["no"])
++        (["yes"])
++        (lib.mkForce (lib.mkApply (appendToAll "!")))
++        (["more"])
 +      ];
 +    };
 +    extend-script = {

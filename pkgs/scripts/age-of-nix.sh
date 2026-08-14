@@ -20,6 +20,7 @@ declare -g -A allowedArgs=(
     [-w, --genkey-wg]='Set the default operation to »genkey-wg«, which generates and encrypts a WireGuard private key and saves the public key in »${secret%.age}.pub«.'
     [-p, --genkey-mkpasswd]='Set the default operation to »genkey-mkpasswd«, which prompts for a password or reads it from file »options«, hashes it with »mkpasswd« and encrypts it.'
     [-R, --genkey-random]='Set the default operation to »genkey-random«, which generates a random string using openssh (32 base64 chars) and encrypts it. »options« may override the arguments to openssh (default: »-base64 32«).'
+    [--repo=path]='Explicitly provide the path to the repository root. Defaults to the current working directory or its closest parent that contains a »flake.nix«.'
     [-x, --trace]="Enable debug tracing in this script."
 )
 details='
@@ -50,9 +51,12 @@ exitCodeOnError=$invalidArgs generic-arg-verify || exit
 
 if [[ ${args[trace]:-} ]] ; then declare -p args argv ; set -x ; fi
 
-exitCodeOnError=$missingFile eval "@{inputs.functions.lib.intoFlakeDir}" || exit
-
 secretsDir=@{args.secretsDir:-${SECRETS_DIR:-./secrets}}
+if [[ ${args[repo]:-} ]] ; then
+    cd "${args[repo]}" || exit $missingFile
+else
+    exitCodeOnError=$missingFile eval "@{inputs.functions.lib.intoFlakeDir}" || exit
+fi
 if [[ ! -d $secretsDir ]] ; then echo "Secrets directory »$secretsDir« does not exist." >&2 ; exit $missingFile ; fi
 
 function operation-unset { # 1: secretFullPath

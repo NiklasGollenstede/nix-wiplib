@@ -8,7 +8,7 @@ function prepare-installer--secrets {
         rootKeyDir=/tmp/shares/rootKeyDir
     else
         rootKeyDir=$( mktemp -d ) && prepend_trap 'rm -rf $rootKeyDir' EXIT || exit
-        nix-wrapped run @{inputs.self}'#'"@{config.wip.services.secrets.appName:?}" -- ${args[decryption-identity]:+ --identity "${args[decryption-identity]}" } decrypt::"@{config.wip.services.secrets.secretsDir:?}"/"@{config.wip.services.secrets.rootKeyEncrypted:?}".age | install /dev/stdin -m 600 $rootKeyDir/rootKeyDecrypted || exit
+        nix-wrapped run @{inputs.self}'#'"@{config.wip.services.secrets.appName:?}" -- --repo=@{inputs.self} ${args[decryption-identity]:+ --identity "${args[decryption-identity]}" } decrypt::"@{config.wip.services.secrets.secretsDir:?}"/"@{config.wip.services.secrets.rootKeyEncrypted:?}".age | install /dev/stdin -m 600 $rootKeyDir/rootKeyDecrypted || exit
         #if [[ "$(id -u)" != '0' && ! ${args[disallow-vm]:-} ]] || [[ ${args[vm]:-} ]] ; then
         #    if [[ ${args[vm-shared]:-} ]] ; then echo "Passing --vm-shared(=${args[vm-shared]}) is currently incompatible with root key decryption." >&2 ; \exit 1 ; fi
         #fi

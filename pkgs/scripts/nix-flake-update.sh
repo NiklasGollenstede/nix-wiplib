@@ -10,9 +10,9 @@ nix flake update "$@" || exit
 # Then pretend the git trees have all been clean:
 jq '(.nodes |= with_entries(
     .value |= if .locked.dirtyRev then
-        ( del(.locked.dirtyRev) | del(.locked.dirtyShortRev) | .locked.url = "file:///dev/null" )
+        ( .locked.dirtyRev as $rev | .locked.rev = ($rev | sub("-dirty$"; "")) | del(.locked.dirtyRev) | del(.locked.dirtyShortRev) | .locked.url = "file:///dev/null" )
     else . end
-))' flake.lock > flake.lock.tmp || exit # '.locked.dirtyRev as $rev | .locked.rev = ($rev | sub("-dirty$"; "")) | '
+))' flake.lock > flake.lock.tmp || exit
 mv flake.lock.tmp flake.lock || exit
 # (Claiming that the former dirtyRev is the locked input's rev is not really correct, but on a local input the rev has no function (other than being printed) anyway.)
 

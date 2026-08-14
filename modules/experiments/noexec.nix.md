@@ -91,13 +91,13 @@ in {
 
         # Make the /nix/store non-iterable, to make it harder for unprivileged programs to search the store for programs they should not have access to:
         # Unless patched, the Nix daemon will reset the permissions on /nix/store to 1775 or die trying.
-        fileSystems."/nix/store".postMountCommands = lib.mkIf cfg.fix.nix ''
+        fileSystems."/nix/store" = lib.mkIf cfg.fix.nix ({ config, ... }: { postMountCommands = ''
             chmod -f 1771 $root/nix/store || true # root owned (usually 1775; should still be writable by the build group, and needs to be traversable by everyone)
             chmod -f  750 $root/nix/store/.links || true # root owned (was 755), but no one but the nix daemon should directly access these (and finding an executable file by content hash could be a risk)
             if [[ ! ''${IN_NIXOS_INSTALLER:-} ]]; then
-                mount -o remount,ro $root/nix/store || true # make this read-only already, so that stage-2-init does not reset the permissions again
+                mount -o remount${lib.optionalString (lib.elem "bind" config.options) ",bind"}${lib.optionalString (lib.elem "rbind" config.options) ",rbind"},ro $root/nix/store || true # make this read-only already, so that stage-2-init does not reset the permissions again
             fi
-        '';
+        ''; });
 
         nix.settings.allowed-users = [ "root" "@wheel" ]; # This goes hand-in-hand with setting mounts as »noexec«. Cases where a user other than root should build stuff are probably fairly rare. A "real" user might want to, but that is either already in the wheel(/sudo) group, or explicitly adding that user is pretty reasonable.
 
@@ -107,7 +107,7 @@ in {
         fileSystems = lib.mapAttrs (where: _: fsArgs: { config = {
             options = [ "exec" ]
             # This needs to be a mount point. If it is not otherwise defined as such, make it a bind mount onto itself:
-            ++ (lib.optional (fsArgs.config.device == where) "bind"); device = lib.mkDefault where;
+            ++ (lib.optional (fsArgs.config.device == where) "rbind"); device = lib.mkDefault where;
             fsType = lib.mkOptionDefault "none";
         }; }) (lib.filterAttrs (where: _: !lib.hasPrefix "/run/user/" where) (builtins.removeAttrs cfg.execPaths specialFileSystems));
 

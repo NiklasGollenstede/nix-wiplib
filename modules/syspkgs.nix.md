@@ -63,9 +63,12 @@ in {
                 nodes = (lib.mapAttrs (name: dep: dep // (lib.optionalAttrs (dep?inputs) {
                     # all "follows" are relative to the previous root, so the new name of that needs to be prepended to all follows-paths
                     inputs = lib.mapAttrs (k: ref: if lib.isString ref then ref else [ cfg.nixos-config.name ] ++ ref) dep.inputs;
+                }) // (lib.optionalAttrs (dep?parent) {
+                    parent = [ cfg.nixos-config.name ] ++ dep.parent;
                 }) // (lib.optionalAttrs (
                     (name == "nixpkgs") || # Ideally, we'd want to do the below for _all_ packages, as Nix's tarball/git cache is broken and an unnecessary slowdown. But then inputs are missing. But for nixpkgs it seems to work. And copying stuff from /dev/null (and apparently ignoring the result) is faster than fetching it from GitHub :shrug:
-                dep.locked?dirtyRev) {
+                    dep.locked?dirtyRev
+                ) {
                     # pretend all inputs were clean, cuz otherwise current (~v2.28) Nix versions fail
                     locked = { inherit (dep.locked) narHash; type = "tarball"; url = "file:///dev/null"; };
                     #original = { id = name; type = "indirect"; };
