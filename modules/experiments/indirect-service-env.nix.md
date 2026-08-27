@@ -39,10 +39,19 @@ in {
         system.${systemBuilderCommands} = ''ln -sT ${env} $out/default-unit-path''; # could also be in /etc
         systemd.globalEnvironment = { LOCALE_ARCHIVE = lib.mkForce null; TZDIR = lib.mkForce null; };
 
-	}) (if modulesVersion >= "25.11" then { # Show unit names instead of descriptions in systemctl status output and during boot.
+	}) (if modulesVersion >= "25.11" then {
         systemd.settings.Manager.DefaultEnvironment = "LOCALE_ARCHIVE=/run/current-system/sw/lib/locale/locale-archive TZDIR=/etc/zoneinfo";
     } else {
         systemd.extraConfig = "DefaultEnvironment=LOCALE_ARCHIVE=/run/current-system/sw/lib/locale/locale-archive TZDIR=/etc/zoneinfo";
-    }) ]);
+    }) {
+        ## Fixes
+
+        systemd.services = lib.mkIf (config.networking.wireless.enable && config.networking.wireless.enableHardening) (let
+            mkUnit = _: { serviceConfig.BindReadOnlyPaths = [ "/run/current-system/default-unit-path/bin" ]; };
+        in if config.networking.wireless.interfaces == [ ] then { wpa_supplicant = mkUnit null; }
+        else lib.listToAttrs (map (i: lib.nameValuePair "wpa_supplicant-${i}" (mkUnit i)) config.networking.wireless.interfaces));
+
+
+    } ]);
 
 }

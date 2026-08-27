@@ -16,7 +16,7 @@ in {
             };
         };
         init = lib.mkOption {
-            description = "Shell commands to run after belsh is loaded, but before it is attached. These run inside a function, so they can create `local`s or `return false` to prevent attaching.";
+            description = "Shell commands to run after blesh is loaded, but before it is attached. These run inside a function, so they can create `local`s or `return false` to prevent attaching.";
             type = lib.types.lines; example = ''
                 bleopt input_encoding=UTF-8
                 blehook ADDHISTORY=some/function/in/config.programs.bash.interactiveShellInit
@@ -34,8 +34,10 @@ in {
             in {
                 is-interactive = "[[ $- == *i* ]]"; # officially recommended way to check for an interactive shell
                 not-disabled = "! [[ \${BLE_DISABLED:-} == 1 ]]"; # provide a clean way to disable blesh for specific environments
+                not-in-installer = "! [[ \${IN_NIXOS_INSTALLER:-} == 1 ]]";
                 has-cache-dir = require-owned-dir "\${XDG_CACHE_HOME:-$HOME/.cache}";
                 has-state-dir = require-owned-dir "\${XDG_STATE_HOME:-$HOME/.local/state}";
+                has-runtime-dir = require-owned-dir "\${XDG_RUNTIME_DIR:-/run/user/\${UID:-0}}";
             };
         };
 

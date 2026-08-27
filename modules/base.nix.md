@@ -66,11 +66,13 @@ in {
         boot.kernelParams = lib.mkBefore ([ "panic=10" ] ++ (lib.optional cfg.panic_on_fail "boot.panic_on_fail")); # Reboot on kernel panic (showing the printed messages for 10s), panic if boot fails. »boot.panic_on_fail« also applies to systemd-initrd.
         #boot.kernelParams = [ "systemd.debug_shell" ]; # This is supposed to enable the service (included with systemd) that opens a root shell on tty9. This seems to only work in Stage 2.
         # might additionally want to do this: https://stackoverflow.com/questions/62083796/automatic-reboot-on-systemd-emergency-mode
-        boot.initrd.systemd.emergencyAccess = lib.mkIf (config.systemd.enableEmergencyMode && config.services.getty.autologinUser == "root") (lib.mkDefault true);
+        # Allow local root shell on emergency if the booted system would offer a local root shell (without requiring a password). To disable this, change »config.systemd.enableEmergencyMode« from its default of »true« to »false«.
         systemd.services = lib.mkIf (config.systemd.enableEmergencyMode && config.services.getty.autologinUser == "root") {
             emergency.environment = { SYSTEMD_SULOGIN_FORCE = lib.mkDefault "1"; };
             rescue.environment = { SYSTEMD_SULOGIN_FORCE = lib.mkDefault "1"; };
         };
+        # Apply the above logic to the initrd as well:
+        boot.initrd.systemd.emergencyAccess = lib.mkIf (config.systemd.enableEmergencyMode && config.services.getty.autologinUser == "root") (lib.mkDefault true);
     }) ({
         # Show unit names instead of descriptions in systemctl status output and during boot.
         systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name"; boot.initrd.systemd.settings.Manager.StatusUnitFormat = lib.mkDefault "name";

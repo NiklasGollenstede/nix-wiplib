@@ -191,7 +191,7 @@ function operation-genkey-mkpasswd { # 1: secretFullPath, 2?: options=path
     encrypt-stdin-to "$1" <<<"$private" || return
 }
 function operation-genkey-random { # 1: secretFullPath, 2?: options=args
-    private=$( @{pkgs.openssl!getExe} rand ${2:- -base64 32 } ) || return
+    private=$( @{pkgs.openssl!getExe} rand ${2:- -hex 32 } ) || return
     printf "Generated random key in %s: %s\n" "$1" "$private"
     encrypt-stdin-to "$1" <<<"$private" || return
 }

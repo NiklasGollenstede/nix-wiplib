@@ -27,6 +27,7 @@ in {
 
     options.${prefix} = { hardware.raspberry-pi = {
         enable = lib.mkEnableOption "base configuration for Raspberry Pi 64bit hardware";
+        mainline = lib.mkEnableOption "use mainline kernel instead of the vendor kernel (since only the former is in the official binary cache)";
         i2c = lib.mkEnableOption ''the ARM i²c /dev/i2c-1 on pins 3+5 / GPIO2+3 (/ SDA+SCL). Also see `hardware.raspberry-pi."4".i2c{0,1}.enable`'';
         gpio = lib.mkEnableOption "GPIO access for the »gpio« group via sysfs (legacy) and »/dev/gpiochip*« (e.g. libgpiod's »gpioset«)";
         lightless = lib.mkEnableOption "operation without any activity lights";
@@ -84,6 +85,17 @@ in {
         ];
 
         boot.initrd.systemd.tpm2.enable = false;
+
+    }) (lib.mkIf cfg.mainline { ## mainline kernel
+
+        boot.kernelPackages = pkgs.linuxPackages; # This itself is not able to discover USB partitions in the initrd.
+        #hardware.enableAllHardware = true; # This is enough, but not exactly subtle.
+        boot.initrd.availableKernelModules = [
+            "uas" # USB Attached Storage
+            "pcie-brcmstb"
+            "reset-raspberrypi" # "Triggers USB chip firmware load."
+        ];
+
 
     }) (lib.mkIf cfg.i2c { ## i2c
 

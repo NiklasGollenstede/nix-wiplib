@@ -42,8 +42,8 @@ in {
                     avoid_warnings = 1; # Prevent the firmware from smashing the frame buffer setup done by the mainline kernel when attempting to show low-voltage or over temperature warnings.
                     kernel = "u-boot-aarch64.bin"; # Works for all 64-bit rPIs (except that (non-SD) boot is broken on rPI5).
                 };
-                #"u-boot-aarch64.bin".source = "${pkgs.ubootRaspberryPiAarch64}/u-boot.bin";
-                "u-boot-aarch64.bin".source = "${(pkgs.buildUBoot rec { # none of this actually works:
+                "u-boot-aarch64.bin".source = "${pkgs.ubootRaspberryPiAarch64}/u-boot.bin";
+                /* "u-boot-aarch64.bin".source = "${(pkgs.buildUBoot rec { # none of this actually works:
                     # https://lists.u-boot-project.org/pipermail/u-boot/2025-May/589080.html
                     defconfig = "rpi_arm64_defconfig";
                     extraMeta.platforms = [ "aarch64-linux" ];
@@ -61,7 +61,7 @@ in {
                         url = "https://git.u-boot-project.org/u-boot/custodians/u-boot-raspberrypi/-/archive/a12ec6cbc4e169bafb1d4a3f5ce1962f01131b09/u-boot-raspberrypi-a12ec6cbc4e169bafb1d4a3f5ce1962f01131b09.tar.bz2";
                         hash = "sha256-Eh2d5u+5KQZawVUhmdIDbhYrXNj6t018c7MzDzB6++A=";
                     };
-                })/* .overrideAttrs (attrs: {
+                }) *//* .overrideAttrs (attrs: {
                     postPatch = (attrs.postPatch or "") + ''
                         if [ ! -f configs/rpi_5_defconfig ]; then
                             echo ${lib.escapeShellArg ''
@@ -74,7 +74,7 @@ in {
                             echo '/ { };' >arch/arm/dts/bcm2712-rpi-5-b-u-boot.dtsi
                         fi
                     ''; # The LOGLEVEL and VERBOSE_BOOT stuff seems to have no effect. Still see only the logo.
-                }) */}/u-boot.bin";
+                }) *//* }/u-boot.bin"; */
             })
             (lib.mkIf (enabled.bcm2710) ({ # Boots at least into the kernel.
             } // (fw [
