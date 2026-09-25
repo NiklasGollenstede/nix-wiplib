@@ -46,9 +46,10 @@ in { imports = [ {
                 };
                 user = lib.mkOption { default = "zfs-from-${name}"; type = lib.types.str; };
                 uid = lib.mkOption { type = lib.types.int; };
-                #gid = lib.mkOption { default = lib.mkIf (config.ids.gids?${args.config.user} || options.gid.isDefined) config.ids.gids.${args.config.user} or args.config.uid; type = lib.types.int; }; # (fixing the GID is not really necessary)
+                gid = lib.mkOption { type = lib.types.int; };
             }; config = {
                 uid = lib.mkIf (config.ids.uids?${args.config.user}) (lib.mkOptionDefault config.ids.uids.${args.config.user});
+                gid = lib.mkIf (config.ids.gids?${args.config.user}) (lib.mkOptionDefault config.ids.gids.${args.config.user});
             }; });
         };
         getSshKey = lib.mkOption {
@@ -69,8 +70,8 @@ in { imports = [ {
             openssh.authorizedKeys.keys = [ ''command="PATH=${pkgs.bash}/bin:${pkgs.findutils}/bin:${pkgs.gnugrep}/bin:${pkgs.mbuffer}/bin:/run/booted-system/sw/bin ${./utils/ssh-command-filter.sh}" ${sshKey}'' ];
             uid = uid; isSystemUser = true; shell = "/bin/sh"; group = user;
         }; }) cfg.sources;
-        users.groups = lib.fun.mapMerge (name: { user, /* gid, */ ... }: { ${user} = {
-            #gid = gid;
+        users.groups = lib.fun.mapMerge (name: { user, gid, ... }: { ${user} = {
+            gid = gid;
         }; }) cfg.sources;
 
 

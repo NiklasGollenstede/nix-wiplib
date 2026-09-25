@@ -117,3 +117,14 @@ Embedding the source code "file" within a MarkDown file emphasizes the importanc
 Having the documentation right next to the code should also help against documentation rot.
 
 Technically, Nix (and most other code files) don't need to have any specific file extension. By embedding the MarkDown header in a block comment, the file can still be a valid source code file, while the MarkDown header ending in a typed code block ensures proper syntax highlighting of the source code in editors or online repos.
+
+
+## License
+
+All files in this repository ([`nix-wiplib`](https://github.com/NiklasGollenstede/nix-wiplib)), except `./LICENSE`, are authored by the authors of this repository, and are copyright 2022 - present Niklas Gollenstede.
+
+See [`patches/README.md#license`](./patches/README.md#license) for the licensing of the included [patches](./patches/).
+All other parts of this software may be used under the terms of the MIT license, as detailed in [`./LICENSE`](./LICENSE).
+
+This license applies to the files in this repository only.
+Any external packages are built from sources that have their own licenses, which should be the ones indicated in the package's metadata.

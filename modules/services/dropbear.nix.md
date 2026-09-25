@@ -17,14 +17,31 @@ in {
     options.${prefix} = { services.dropbear = {
         enable = lib.mkEnableOption "dropbear SSH daemon";
         package = lib.mkPackageOption pkgs "dropbear" { };
-        flags = lib.mkOption { description = "Flags to pass to dropbear"; type = lib.types.attrsOf (lib.types.oneOf [ (lib.types.listOf lib.types.str) lib.types.str lib.types.bool ]); default = { "w" = true; }; };
-        port = lib.mkOption { description = "TCP port to listen on and open a firewall rule for."; type = lib.types.port; default = 22; };
-        openFirewall = (lib.mkEnableOption "opened firewall port for the dropbear SSH daemon") // { default = true; example = false; };
+        flags = lib.mkOption {
+            description = "Flags to pass to the dropbear server. The attr names are the flag letters without the dash/minus, the values may be `true` to set the flag without a value, `false` to omit the flag, or a string or list of strings to pass the flag one or multiple times with the respective value(s).";
+            type = lib.types.attrsOf (lib.types.oneOf [ (lib.types.listOf lib.types.str) lib.types.str lib.types.bool ]);
+            default = { }; example = { "w" = true; };
+        };
+        port = lib.mkOption {
+            description = "TCP port to listen on and optionally open a firewall rule for (see `.openFirewall`).";
+            type = lib.types.port; default = 22;
+        };
+        openFirewall = (lib.mkEnableOption "opened firewall port for the dropbear SSH daemon") // {
+            default = true; example = false;
+        };
         socketActivation = lib.mkEnableOption "socket activation mode for dropbear, where systemd launches dropbear on incoming TCP connections, instead of dropbear permanently running and listening on its TCP port";
-        rootKeys = lib.mkOption { description = "Literal lines to write to »/root/.ssh/authorized_keys«"; default = ""; type = lib.types.lines; };
-        hostKeys = lib.mkOption { description = "Location of the host key(s) to use. If empty, then a key(s) will be generated at »/etc/dropbear/dropbear_(ecdsa/rsa)_host_key« on first access to the server."; default = [ ]; type = lib.types.listOf lib.types.path; };
+        rootKeys = lib.mkOption {
+            description = "Literal lines to write to »/root/.ssh/authorized_keys«";
+            default = ""; type = lib.types.lines;
+        };
+        hostKeys = lib.mkOption {
+            description = "Location of existing host key(s) to use. If empty, then key(s) will be generated at »/etc/dropbear/dropbear_(ecdsa/rsa)_host_key« on first access to the server.";
+            default = [ ]; type = lib.types.listOf lib.types.path;
+        };
         sftpServer.enable = lib.mkEnableOption "openssh's sftp-server for dropbear";
-        sftpServer.package = lib.mkPackageOption pkgs "openssh" { };
+        sftpServer.package = lib.mkPackageOption pkgs "openssh" {
+            example = ''pkgs.runCommand "openssh-sftp" { } "mkdir -p $out/libexec && cp -a ''${pkgs.openssh}/libexec/sftp-server $out/libexec/"'';
+        };
     }; };
 
     config = let
@@ -44,9 +61,11 @@ in {
 
         systemd.tmpfiles.rules = lib.mkIf (cfg.rootKeys != "") [ (lib.fun.mkTmpfile { type = "L+"; path = "/root/.ssh/authorized_keys"; argument = pkgs.writeText "root-ssh-authorized_keys" cfg.rootKeys; }) ];
 
-        environment.etc."dropbear/.keep" = lib.mkIf (cfg.hostKeys == [ ]) { source = "/dev/null"; }; # could maybe be changed using DROPBEAR_RSAKEY_DIR
+        environment.etc."dropbear/.keep" = lib.mkIf (cfg.hostKeys == [ ]) { source = "/dev/null"; }; # could maybe be changed using the DROPBEAR_RSAKEY_DIR env var (not sure that mechanic is in nix's build, though)
 
-        environment.extraSetup = lib.mkIf cfg.sftpServer.enable ''
+        # The (openssh) sftp-server executable needs to be at the path that the SFTPSERVER_PATH macro expands to, which the nix build of dropbear sets to /run/current-system/sw/libexec/sftp-server (by default):
+        environment.systemPackages = lib.mkIf (cfg.sftpServer.enable && (lib.elem "/libexec" config.environment.pathsToLink)) [ cfg.sftpServer.package ];
+        environment.extraSetup = lib.mkIf (cfg.sftpServer.enable && !(lib.elem "/libexec" config.environment.pathsToLink)) ''
             if [[ ! -e $out/libexec/sftp-server ]] ; then
                 mkdir -p $out/libexec
                 ln -s ${cfg.sftpServer.package}/libexec/sftp-server $out/libexec/sftp-server

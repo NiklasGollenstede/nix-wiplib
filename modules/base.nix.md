@@ -110,7 +110,7 @@ in {
             writableStore = lib.mkDefault false;
         });
 
-        boot.resumeDevice = lib.mkIf (options.virtualisation?useDefaultFilesystems && !config.virtualisation.useDefaultFilesystems) (lib.mkVMOverride "");
+        boot.resumeDevice = lib.mkIf (options.virtualisation?useDefaultFilesystems && config.virtualisation.useDefaultFilesystems) (lib.mkVMOverride "");
 
         environment.etc = lib.mkIf (config.boot.enableContainers) (lib.fun.mapMerge (name: { config, ... }: {
             "nixos-containers/${name}/system".source = config.system.build.toplevel;

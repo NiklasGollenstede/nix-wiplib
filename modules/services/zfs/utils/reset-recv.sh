@@ -32,7 +32,10 @@ zfs list -r "$1" -H -o name | while read dataset ; do
 
     # If the most recent snapshot got pruned from the target / locally (e.g. because a stream interruption meant the most recent snapshot is not a persistent one, or because there was a race between creating and sending the persistent snapshot and a temporary one being created in between), then the dataset needs to be rolled back to its latest snapshot, in order to be able to receive any updates onto it:
     if [[ $( zfs get -pH -o value written "$dataset" ) != 0 ]] ; then # If a most recent snapshot that had no data was destroyed, then the receive still works. The /%recv things are listed as separate FSes, not snapshots, so they should take their data with them when deleted.
-        [[ ${latest:-} ]] || latest=$( zfs list -t snapshot -H -o name -S creation "$dataset" | head -n1 ) # This is quite slow, esp. if may snapshots exist.
+        if [[ ! $snapPrefix ]] ; then # (if we did not do this above:)
+            snapshots=$( zfs list -t snapshot -H -o name -S creation "$dataset" ) # This is quite slow, esp. if may snapshots exist.
+            latest=${snapshots%%$'\n'*}
+        fi
         if [[ $latest ]] ; then ( set -x ; zfs rollback "$latest" || true ) ; fi # This is even slower, even if nothing needs to be rolled back. (Hence the »written« check.)
     fi
 done

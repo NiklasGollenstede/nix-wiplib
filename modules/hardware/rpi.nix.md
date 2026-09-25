@@ -73,7 +73,7 @@ in {
         #hardware.firmware = [ pkgs.firmwareLinuxNonfree pkgs.raspberrypiWirelessFirmware ]; # TODO: try with this instead
         powerManagement.cpuFreqGovernor = lib.mkDefault "ondemand"; # (not sure whether this is the best choice ...)
 
-        hardware.raspberry-pi."4".dwc2.enable = true; # this is required for (the builtin) USBs on the CM4 to work (with NixOS' device trees, setting »dtoverlay=dwc2« in config.txt or eeprom has no effect)
+        #hardware.raspberry-pi."4".dwc2.enable = true; # this is required for (the builtin) USBs on the CM4 to work (with NixOS' device trees, setting »dtoverlay=dwc2« in config.txt or eeprom has no effect)
         #hardware.raspberry-pi."4".dwc2.dr_mode = lib.mkDefault "otg"; # or "peripheral" or "host" ("otg" seems to work just fine also as host)
 
         hardware.deviceTree.enable = true;
