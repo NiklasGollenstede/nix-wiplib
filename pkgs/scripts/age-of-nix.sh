@@ -12,7 +12,8 @@ argvDesc='[[operation:[options:]]secret ...]'
 declare -g -A allowedArgs=(
     [--identity=privateKeyPath]='Explicitly provide the private key to use for »decrypt«, »edit« and »rekey« operations.'
     [-e, --edit]='Set the default operation to »edit«, which decrypts the secret (if it existed) to a temporary file, opens it in the »$EDITOR«, and (re-)encrypts it afterwards.'
-    [-r, --rekey]='Set the default operation to »rekey«, which decrypts the secret and re-encrypts it for the currently declared targets.'
+    [-r, --rekey]='Set the default operation to »rekey«, which decrypts the secret(s) and re-encrypts it/them for the currently declared targets. »secret« is interpreted as match pattern (with »*«/»?«/»[...]«) and may end in »/« to specify a prefix. If no secrets to operate on are specified, all secrets are rekeyed.'
+    [-l, --list]="Set the default operation to »list«, which lists secrets. »secret« is interpreted as match pattern (with »*«/»?«/»[...]«) and may end in »/« to specify a prefix. For each matched secret, this prints the secret's name and the keys that should and currently are able to decrypt it. If no secrets to operate on are specified, all secrets are listed." # »options« may be »by-key«, to list, for each host that may decrypt one of the matched secrets, the secrets it can decrypt."
     [-d, --decrypt]='Set the default operation to »decrypt«, which decrypts the secret to the path in »options« (with mode 0600) or stdout.'
     [-E, --encrypt]='Set the default operation to »encrypt«, which encrypts the file (path) in »options« (which could be a substituted command: »<( echo foo )«) or the entirety of stdin to the secret.'
     [-s, --genkey-ssh]='Set the default operation to »genkey-ssh«, which generates and encrypts an (ed25519) SSH private key and saves the public key in »${secret%.age}.pub«. »options«, if set, becomes the pub keys comment.'
@@ -24,22 +25,23 @@ declare -g -A allowedArgs=(
     [-x, --trace]="Enable debug tracing in this script."
 )
 details='
-Compared to »agenix«, this version allows inferring the »$RULES«/»./secrets.nix« directly from your NixOS configurations, and supports various key generation schemes, and manipulating multiple keys in one call.
+Details:
+    Compared to »agenix«, this version allows inferring the »$RULES«/»./secrets.nix« directly from your NixOS configurations, and supports various key generation schemes, and manipulating multiple keys in one call.
 
-The positional arguments are a sequence of secrets manipulation operations, each consisting of the »operation« name, an optional »options« string, and the »secret« path.
-The »'"$secretsDirText"'« prefix and ».age« suffix in the »secret« paths are optional.
-The operation names are the operations »edit«, »rekey«, »de-«/»encrypt« and various »genkey-*« operations, as documented above. If a default-operation option is provided, the individual secret'"'"'s operation may be omitted in favor of the default operation.
-Whether the »options« string may be provided and what it means depends on the operation.
+    The positional arguments are a sequence of secrets manipulation operations, each consisting of the »operation« name, an optional »options« string, and the »secret« path.
+    The »'"$secretsDirText"'/« prefix and ».age« suffix in the »secret« paths are optional.
+    The operation names are the operations »edit«, »rekey«, »de-«/»encrypt«, »list« and various »genkey-*« operations, as documented above. If a default-operation option is provided, the individual secret'"'"'s operation may be omitted in favor of the default operation.
+    Whether the »options« string may be provided and what it means depends on the operation.
 
 Examples:
-# For a new host, generate the host key and some secrets it can decrypt with it:
-$ age-of-nix -- genkey-ssh:ssh/hosts/host@host1 genkey-ssh::ssh/service/backup@host1 genkey-wg::wg/wg0@host1 genkey-mkpasswd::shadow/user1
+    # For a new host, generate the host key and some secrets it can decrypt with it:
+    $ age-of-nix -- genkey-ssh:ssh/hosts/host@host1 genkey-ssh::ssh/service/backup@host1 genkey-wg::wg/wg0@host1 genkey-mkpasswd::shadow/user1
 
-# Write some fixed text to encrypted secrets:
-$ age-of-nix encrypt:<( echo secret-foo ):dummy/foo encrypt:<( echo secret-bar ):dummy/bar
+    # Write some fixed text to encrypted secrets:
+    $ age-of-nix encrypt:<( echo secret-foo ):dummy/foo encrypt:<( echo secret-bar ):dummy/bar
 
-# Rekey all user passwords for a new host:
-$ age-of-nix --rekey -- genkey-ssh::ssh/hosts/host@newHost $secretsDir/shadow/*
+    # Rekey all user passwords for a new host:
+    $ age-of-nix --rekey -- genkey-ssh::ssh/hosts/host@newHost $secretsDir/shadow/*
 '
 
 invalidArgs=2
@@ -60,10 +62,10 @@ fi
 if [[ ! -d $secretsDir ]] ; then echo "Secrets directory »$secretsDir« does not exist." >&2 ; exit $missingFile ; fi
 
 function operation-unset { # 1: secretFullPath
-    echo "Neither default operation nor explicit operation for »$1« is set." >&2 ; exit $invalidArgs
+    echo "Neither default operation nor explicit operation for secret »$1« is set." >&2 ; exit $invalidArgs
 }
 function no-options { # 1: secretFullPath, 2?: options
-    if [[ $2 ]] ; then echo "No options allowed for »$1«." >&2 ; exit $invalidArgs ; fi
+    if [[ $2 ]] ; then echo "No options allowed for operation »$1«." >&2 ; exit $invalidArgs ; fi
 }
 
 needReEval= # a previous operation changed the (public) secret files
@@ -71,15 +73,31 @@ secretsJSON=@{args.secretsJSON}
 agenixCompat= ; if [[ ! $secretsJSON ]] ; then agenixCompat=1 ; {
     secretsJSON=$( @{pkgs.nix}/bin/nix-instantiate --json --eval --strict -E '{ rules, }: import rules' --argstr rules "$RULES" ) || exit
 } ; fi
+function update-secretsJSON {
+    if [[ ! $needReEval || $agenixCompat ]] ; then return ; fi # we can't unset needReEval here, as we are called in a subshell
+    secretsJSON=$( @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --raw .#.apps.@{pkgs.stdenv.hostPlatform.system}.@{args.appName}.derivation.secretsJSON ) || return
+}
+function get-secrets { # 1?: matchPattern
+    update-secretsJSON || return
+    local secrets ; secrets=$( <<<$secretsJSON @{pkgs.jq!getExe} -r 'keys[]' ) || return
+    if [[ $# == 0 ]] ; then printf '%s\n' "$secrets" ; return ; fi
+    local matchPattern=$1
+    while IFS= read -r secret ; do
+        if [[ $secret != $matchPattern ]] ; then continue ; fi # (right hand operand is intentionally unquoted)
+        printf '%s\n' "$secret"
+    done < <( printf '%s\n' "$secrets" )
+}
 function get-recipients { # 1: secretFullPath
-    if [[ $needReEval && ! $agenixCompat ]] ; then
-        secretsJSON=$( @{pkgs.nix}/bin/nix --extra-experimental-features 'nix-command flakes' eval --raw .#.apps.@{pkgs.stdenv.hostPlatform.system}.@{args.appName}.derivation.secretsJSON ) || return
-    fi
+    update-secretsJSON || return
     recipients=$( <<<$secretsJSON @{pkgs.jq!getExe} -r --arg path "$1" '.[$path].publicKeys[]' ) || true
     if [[ ! $recipients ]] ; then
         echo "No recipients declared for secret »$1«." >&2 ; exit $missingFile
     fi
     printf '%s\n' "$recipients"
+}
+function get-fingerprint { # 1: publicKey(only the base64 part)
+    local id=$( <<<$1 base64 -d | sha256sum | @{pkgs.xxd!getExe} -r -p | head -c 4 | base64 -w0 )
+    echo "${id%%=*}"
 }
 
 identity=
@@ -117,7 +135,7 @@ function git-track { # 1: path
 
 function encrypt-stdin-to { # 1: secretFullPath
     mkdir -p "$( dirname "$1" )" || return
-    @{pkgs.age}/bin/age --encrypt --recipients-file <( get-recipients "$1" ) --output "$1" || return
+    @{pkgs.age}/bin/age --encrypt --recipients-file <( get-recipients "$1" ) --output "$1" || return ; needReEval=
 }
 function decrypt-to-stdout { # 1: secretFullPath
     init-identity || return
@@ -132,10 +150,52 @@ function operation-edit { # 1: secretFullPath, 2?: options=
     PATH=$callerPATH ${EDITOR:?} "$tmpFile" || return
     encrypt-stdin-to "$1" <"$tmpFile" || return ; rm -f "$tmpFile" || true
 }
-function operation-rekey { # 1: secretFullPath, 2?: options=
+function operation-rekey { # 1: matchPattern, 2?: options=
     init-tmpFile || return ; no-options "$1" "$2" || return
-    decrypt-to-stdout "$1" >"$tmpFile" || return
-    encrypt-stdin-to "$1" <"$tmpFile" || return ; rm -f "$tmpFile" || true
+    local secrets=( ) ; if [[ $1 == *'*'* || $1 == *'?'* || $1 == *'['* ]] ; then
+        readarray -t secrets < <( get-secrets "$1" ) || return ; needReEval=
+    else
+        secrets=( "$1" )
+    fi
+    for secret in "${secrets[@]}"; do
+        if [[ ! -s $secret ]] ; then echo "$secret: does not exist or is empty, skipping rekey." >&2 ; continue ; fi
+
+        local ids=( $( <$secret @{pkgs.gnugrep!getExe} --text -o -P -- '-> ssh-ed25519 \K[^ ]{6}' ) ) || true
+        local recipients ; readarray -t recipients < <( get-recipients "$secret" ) || return ; needReEval=
+        local index ; for index in ${!recipients[@]} ; do
+            local recipient=${recipients[$index]}
+            if [[ ! $recipient ]] ; then unset recipients[$index] ; continue ; fi ; recipient=( ${recipient} )
+            local id=$( get-fingerprint "${recipient[1]}" )
+            if [[ " ${ids[*]} " == *" $id "* ]] ; then unset recipients[$index] ; fi
+        done
+        if [[ ! ${recipients[@]:-} ]] ; then echo "$secret: no new recipients, skipping rekey." >&2 ; continue ; fi
+
+        decrypt-to-stdout "$secret" >"$tmpFile" || return
+        encrypt-stdin-to "$secret" <"$tmpFile" || return ; rm -f "$tmpFile" || true
+    done
+}
+function operation-list { # 1: matchPattern, 2?: options=by-key
+    local matchPattern=$1 ; no-options "$1" "$2" || return # local byKey= ; [[ ,$2, == *,by-key,* ]] && byKey=1
+    update-secretsJSON ; needReEval=
+    while IFS= read -r secret ; do
+        local missing= ; [[ ! -s $secret ]] && missing=' (missing)'
+        local -A presentIDs=( ) ; if [[ ! $missing ]] ; then
+            local ids=( $( <$secret @{pkgs.gnugrep!getExe} --text -o -P -- '-> ssh-ed25519 \K[^ ]{6}' ) ) || true
+            for id in "${ids[@]}" ; do presentIDs[$id]=1 ; done
+        fi
+        local recipients ; readarray -t recipients < <( get-recipients "$secret" ) || return ; needReEval=
+        printf '%s%s:\n' "$secret" "$missing"
+        local recipient ; for recipient in "${recipients[@]}" ; do
+            if [[ ! $recipient ]] ; then continue ; fi ; recipient=( ${recipient} )
+            local id=$( get-fingerprint "${recipient[1]}" )
+            present=missing ; for pID in "${!presentIDs[@]}" ; do if [[ $pID == $id ]] ; then present=present ; unset presentIDs[$id] ; fi ; done
+            printf '    %s: %s %s\n' "$id" $present "${recipient[2]:+(${recipient[2]:-})}"
+        done
+        if [[ ${#presentIDs[@]} != 0 ]] ; then
+            printf '    %s: undeclared\n' "${!presentIDs[@]}"
+        fi
+        printf '\n'
+    done < <( get-secrets "$matchPattern" )
 }
 function operation-decrypt { # 1: secretFullPath, 2?: options=path
     if [[ $2 ]] ; then
@@ -197,7 +257,7 @@ function operation-genkey-random { # 1: secretFullPath, 2?: options=args
 }
 
 defaultOperation=
-for operation in edit rekey decrypt encrypt genkey-ssh genkey-tls genkey-wg genkey-mkpasswd genkey-random ; do
+for operation in edit rekey list decrypt encrypt genkey-ssh genkey-tls genkey-wg genkey-mkpasswd genkey-random ; do
     if [[ ${args[$operation]:-} ]] ; then
         if [[ $defaultOperation ]] ; then echo "Multiple default operations specified: »$defaultOperation« and »$operation«" >&2 ; exit $invalidArgs ; fi
         defaultOperation=$operation
@@ -205,23 +265,28 @@ for operation in edit rekey decrypt encrypt genkey-ssh genkey-tls genkey-wg genk
 done
 defaultOperation=${defaultOperation:-unset}
 
-if [[ $defaultOperation == rekey && ${#argv[@]} == 0 ]] ; then
-    echo "Rekeying of all secrets not implemented yet." >&2 ; exit 4 # TODO!
+if [[ ${#argv[@]} == 0 ]] ; then
+    if [[ $defaultOperation == rekey || $defaultOperation == list ]] ; then
+        argv=( '*' )
+    else
+        echo "No secrets specified to operate on. See --help." >&2 ; exit $invalidArgs
+    fi
 fi
 
 for spec in "${argv[@]}" ; do
     # parse [[operation:[options:]]secret
     [[ $spec =~ ^([^:]*:)?([^:]*:)?(.+)$ ]] || true
-    operation=${BASH_REMATCH[1]%:}
+    operation=${BASH_REMATCH[1]%:} ; : ${operation:=$defaultOperation}
     options=${BASH_REMATCH[2]%:}
     secret=${BASH_REMATCH[3]}
 
     if [[ $secret != $secretsDir/* ]] ; then secret=$secretsDir/$secret ; fi
+    if [[ $secret == */ ]] ; then secret=$secret'*' ; fi # tailing slash only makes sense for patterns
     if [[ $secret != *.age ]] ; then secret=$secret.age ; fi
 
-    if [[ ! -s $secret ]] ; then
-        if [[ $operation == rekey || $operation == decrypt ]] ; then
-            echo "Can't $operation non-existing secret »$secret«." >&2 ; exit $missingFile
+    if [[ $operation != list && $operation != rekey && ! -s $secret ]] ; then
+        if [[ $operation == decrypt ]] ; then
+            echo "$secret: does not exist, can't $operation." >&2 ; exit $missingFile
         fi
         if [[ ! -e $secret ]] ; then
             mkdir -p "$( dirname "$secret" )" || exit
@@ -230,6 +295,6 @@ for spec in "${argv[@]}" ; do
         git-track "$secret" || exit
     fi
 
-    operation-"${operation:-$defaultOperation}" "$secret" "$options" || exit
+    operation-"$operation" "$secret" "$options" || exit
 
 done

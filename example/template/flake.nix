@@ -16,9 +16,9 @@
 }; outputs = inputs: let patches = {
 
     nixpkgs = [
-		# remote: { url = "https://github.com/NixOS/nixpkgs/pull/###.diff"; sha256 = inputs.nixpkgs.lib.fakeSha256; }
+        # remote: { url = "https://github.com/NixOS/nixpkgs/pull/###.diff"; sha256 = inputs.nixpkgs.lib.fakeSha256; }
         # import: inputs.foo.patches.nixpkgs.bar
-		# local: ./overlays/patches/nixpkgs/bar.patch # (use native (unquoted) path to the file itself, so that the patch has its own nix store path, which only changes if the patch itself changes (and not if any of the other files in ./. change))
+        # local: ./overlays/patches/nixpkgs/bar.patch # (use native (unquoted) path to the file itself, so that the patch has its own nix store path, which only changes if the patch itself changes (and not if any of the other files in ./. change))
 
         # Add lib.mkApply:
         inputs.wiplib.patches.nixpkgs.mkApply-25-11
@@ -38,6 +38,7 @@ in [ # Run »nix flake show --allow-import-from-derivation« to see what this me
             environment.systemPackages = [ ];
             programs.bash.interactiveShellInit = inputs.nixpkgs.lib.mkAfter ''
             '';
+            #programs.vscode.enable = true; # for shell integration
         };
         #devShell = "my-dev-shell";
         args = [ "--read-only-glob=?**/.vscode/" ];
