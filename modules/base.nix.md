@@ -38,6 +38,7 @@ in {
     config = lib.mkIf cfg.enable (lib.mkMerge [ ({
 
         users.mutableUsers = false; users.allowNoPasswordLogin = true; # Don't babysit. Can roll back or redeploy.
+        ${prefix}.users.autoIDs = lib.mkDefault true;
         networking.hostId = lib.mkDefault (builtins.substring 0 8 (builtins.hashString "sha256" config.networking.hostName));
         environment.etc."machine-id".source = lib.mkOverride 500 (builtins.toFile "machine-id" (builtins.substring 0 32 (builtins.hashString "sha256" "${config.networking.hostName}:machine-id"))); # Needs to exist (but may be empty) for systemd not to consider this a fresh installation ("first boot"). Also, is used as identifier in logs (vs. containers/VMs). This works, but it "should be considered "confidential", and must not be exposed in untrusted environments". Guess containers/VMs could send fake host system logs? (Priority 500 is less important than normal assignment, but replaces `mkDefault` from NixOS.)
         documentation.man.enable = lib.mkDefault config.documentation.enable;
